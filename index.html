@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MJL ERP Financeiro</title>
+<style>
+:root{
+  --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
+  --green:#1e7e4a;--green-light:#eaf5ee;
+  --red:#c0392b;--red-light:#fdecea;
+  --yellow:#d68910;--yellow-light:#fef9e7;
+  --orange:#e67e22;--orange-light:#fef0e6;
+  --bg:#f4f6fa;--surface:#fff;--border:#dde2ea;
+  --text:#1c2b3a;--text2:#5a6a7a;--text3:#8a9aaa;
+  --r:12px;--r-sm:8px;--shadow:0 2px 8px rgba(26,79,122,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+#sidebar{width:220px;background:var(--brand);color:#fff;position:fixed;top:0;left:0;height:100vh;display:flex;flex-direction:column;z-index:100;overflow-y:auto;}
+#sidebar .logo{padding:16px;border-bottom:1px solid rgba(255,255,255,.15);flex-shrink:0;}
+#sidebar .logo h1{font-size:15px;font-weight:700;}
+#sidebar .logo p{font-size:10px;opacity:.55;margin-top:2px;}
+#sidebar .menu-section{padding:8px 0 4px 14px;font-size:9px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.8px;margin-top:6px;}
+#sidebar nav a{display:flex;align-items:center;gap:9px;padding:10px 16px;color:rgba(255,255,255,.75);text-decoration:none;font-size:12px;cursor:pointer;transition:all .15s;border-left:3px solid transparent;}
+#sidebar nav a:hover,#sidebar nav a.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:var(--yellow);}
+#main{margin-left:220px;min-height:100vh;}
+#topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:var(--shadow);}
+#topbar h2{font-size:15px;font-weight:700;color:var(--brand);}
+#content{padding:20px 24px;}
+.page{display:none;}.page.active{display:block;}
+
+/* CARDS */
+.card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:18px;box-shadow:var(--shadow);margin-bottom:16px;}
+.card-title{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:14px;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;justify-content:space-between;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+.stat{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:16px;box-shadow:var(--shadow);}
+.stat .lbl{font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px;}
+.stat .val{font-size:22px;font-weight:700;}
+.stat .sub{font-size:11px;color:var(--text3);margin-top:3px;}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:var(--bg);color:var(--text2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--brand-light);}
+
+/* BADGES */
+.badge{display:inline-block;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700;}
+.b-green{background:var(--green-light);color:var(--green);}
+.b-red{background:var(--red-light);color:var(--red);}
+.b-yellow{background:var(--yellow-light);color:var(--yellow);}
+.b-blue{background:var(--brand-light);color:var(--brand);}
+.b-orange{background:var(--orange-light);color:var(--orange);}
+.b-gray{background:var(--bg);color:var(--text3);}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r-sm);font-size:13px;font-weight:700;border:none;cursor:pointer;transition:all .15s;}
+.btn-primary{background:var(--brand);color:#fff;}
+.btn-green{background:var(--green);color:#fff;}
+.btn-ghost{background:transparent;color:var(--brand);border:1.5px solid var(--border);}
+.btn-ghost:hover{background:var(--brand-light);}
+.btn-danger{background:var(--red-light);color:var(--red);border:1px solid #f5c6c2;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-orange{background:var(--orange);color:#fff;}
+
+/* FORMS */
+.fg{margin-bottom:14px;}
+.fg label{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;color:var(--text);background:var(--surface);outline:none;font-family:inherit;}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--brand);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal{background:var(--surface);border-radius:var(--r);width:100%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15);}
+.modal-hdr{padding:18px 22px 0;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.modal-hdr h3{font-size:15px;font-weight:700;color:var(--brand);}
+.modal-cls{background:none;border:none;font-size:24px;color:var(--text3);cursor:pointer;}
+.modal-body{padding:0 22px 22px;}
+.hidden{display:none!important;}
+
+/* DRE */
+.dre-section{margin-bottom:8px;}
+.dre-row{display:flex;justify-content:space-between;padding:8px 12px;border-radius:6px;font-size:13px;}
+.dre-row.header{background:var(--brand);color:#fff;font-weight:700;font-size:12px;}
+.dre-row.total{background:var(--brand-light);font-weight:700;border:1.5px solid var(--brand);}
+.dre-row.lucro{background:var(--green-light);font-weight:700;color:var(--green);border:1.5px solid #9ad1b0;}
+.dre-row.prejuizo{background:var(--red-light);font-weight:700;color:var(--red);border:1.5px solid #f5c6c2;}
+.dre-row.sub{padding-left:24px;color:var(--text2);}
+.dre-row.deducao{padding-left:24px;color:var(--red);}
+.dre-row:nth-child(even):not(.header):not(.total):not(.lucro):not(.prejuizo){background:#fafbfc;}
+
+/* CENTRO CUSTO */
+.cc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:12px;}
+.cc-hdr{background:var(--brand);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;}
+.cc-hdr h4{font-size:13px;font-weight:700;}
+.cc-body{padding:14px 16px;}
+.cc-linha{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;}
+.cc-linha:last-child{border-bottom:none;}
+.cc-total{display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;font-size:13px;border-top:2px solid var(--brand);margin-top:6px;}
+.margem-pos{color:var(--green);}
+.margem-neg{color:var(--red);}
+
+/* RECIBO */
+.recibo{font-size:12px;border:2px solid var(--brand);border-radius:var(--r);padding:24px;background:#fff;}
+.recibo-hdr{display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:2px solid var(--brand);margin-bottom:16px;}
+.recibo-empresa{flex:1;}
+.recibo-empresa .nome{font-size:16px;font-weight:700;color:var(--brand);}
+.recibo-empresa .sub{font-size:10px;color:var(--text2);margin-top:2px;}
+.recibo-titulo{text-align:center;font-size:18px;font-weight:700;color:var(--brand);margin-bottom:16px;padding:10px;background:var(--brand-light);border-radius:var(--r-sm);}
+.recibo-valor{text-align:center;margin:16px 0;padding:16px;background:var(--green-light);border-radius:var(--r-sm);border:2px solid #9ad1b0;}
+.recibo-valor .val{font-size:28px;font-weight:700;color:var(--green);}
+.recibo-valor .extenso{font-size:12px;color:var(--text2);margin-top:4px;}
+.recibo-info{margin-bottom:14px;}
+.recibo-info table{width:100%;}
+.recibo-info td{padding:6px 8px;font-size:12px;border-bottom:1px solid var(--border);}
+.recibo-info td:first-child{font-weight:700;color:var(--text2);width:35%;}
+.recibo-assin{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:24px;}
+.recibo-assin-linha{border-top:1.5px solid var(--text2);padding-top:6px;text-align:center;font-size:10px;color:var(--text2);}
+.recibo-footer{text-align:center;font-size:10px;color:var(--text3);margin-top:16px;padding-top:10px;border-top:1px solid var(--border);}
+
+/* FLUXO CAIXA */
+.fc-mes{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;margin-bottom:8px;}
+.fc-mes-hdr{background:var(--brand-light);padding:10px 14px;display:flex;justify-content:space-between;font-weight:700;font-size:13px;color:var(--brand);cursor:pointer;}
+.fc-mes-body{padding:10px 14px;}
+.fc-linha{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-bottom:1px solid var(--bg);}
+.fc-linha:last-child{border-bottom:none;}
+
+/* PRINT */
+@media print{
+  #sidebar,#topbar,.btn,button,.modal-overlay{display:none!important;}
+  #main{margin-left:0!important;}
+  #content{padding:0!important;}
+  body{background:#fff!important;}
+  .page{display:none!important;}
+  #print-area{display:block!important;}
+}
+#print-area{display:none;}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="logo">
+    <h1>MJL ERP</h1>
+    <p>Gestão Financeira</p>
+  </div>
+  <nav>
+    <div class="menu-section">Visão Geral</div>
+    <a class="nav-link active" data-page="dashboard">📊 Dashboard</a>
+    <a class="nav-link" data-page="dre">📈 DRE Gerencial</a>
+    <a class="nav-link" data-page="fluxo">💧 Fluxo de Caixa</a>
+    <a class="nav-link" data-page="centrocusto">🎯 Centro de Custo</a>
+
+    <div class="menu-section">Cadastros</div>
+    <a class="nav-link" data-page="clientes">🏢 Clientes & Contratos</a>
+    <a class="nav-link" data-page="colaboradores">👷 Colaboradores</a>
+    <a class="nav-link" data-page="despesas-cat">📂 Categorias</a>
+
+    <div class="menu-section">Financeiro</div>
+    <a class="nav-link" data-page="receber">💰 Contas a Receber</a>
+    <a class="nav-link" data-page="pagar">💸 Contas a Pagar</a>
+    <a class="nav-link" data-page="folha">👥 Folha de Pagamento</a>
+    <a class="nav-link" data-page="impostos">🏛️ Impostos & DAS</a>
+
+    <div class="menu-section">Documentos</div>
+    <a class="nav-link" data-page="recibos">🧾 Recibos</a>
+
+    <div class="menu-section">Sistema</div>
+    <a class="nav-link" data-page="config">⚙️ Configurações</a>
+  </nav>
+  <div style="padding:12px 14px;border-top:1px solid rgba(255,255,255,.15);font-size:10px;opacity:.5;margin-top:auto;">
+    MJL Serviços e Soluções<br>CNPJ 46.636.732/0001-73
+  </div>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <h2 id="page-title">Dashboard Financeiro</h2>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="filtro-mes" style="padding:6px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:12px;" onchange="atualizarTudo()"></select>
+      <button class="btn btn-primary btn-sm" id="btn-novo" onclick="novoItem()" style="display:none;">+ Novo</button>
+      <button class="btn btn-ghost btn-sm" onclick="imprimirPagina()">🖨️</button>
+    </div>
+  </div>
+
+  <div id="content">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="stat-grid">
+        <div class="stat"><div class="lbl">Receita Bruta</div><div class="val" id="st-receita" style="color:var(--green)">R$ 0</div><div class="sub">no mês</div></div>
+        <div class="stat"><div class="lbl">Total a Pagar</div><div class="val" id="st-pagar" style="color:var(--red)">R$ 0</div><div class="sub">no mês</div></div>
+        <div class="stat"><div class="lbl">Resultado</div><div class="val" id="st-resultado">R$ 0</div><div class="sub">lucro/prejuízo</div></div>
+        <div class="stat"><div class="lbl">Margem</div><div class="val" id="st-margem">0%</div><div class="sub">sobre receita</div></div>
+        <div class="stat"><div class="lbl">A Receber</div><div class="val" id="st-areceber" style="color:var(--brand)">R$ 0</div><div class="sub">pendente</div></div>
+        <div class="stat"><div class="lbl">Em Atraso</div><div class="val" id="st-atraso" style="color:var(--orange)">R$ 0</div><div class="sub">vencido</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="card">
+          <div class="card-title">Receitas por Cliente</div>
+          <div id="dash-clientes"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Principais Custos</div>
+          <div id="dash-custos"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:0;">
+        <div class="card-title">Próximos Vencimentos</div>
+        <div id="dash-vencimentos"></div>
+      </div>
+    </div>
+
+    <!-- DRE -->
+    <div class="page" id="page-dre">
+      <div class="card">
+        <div class="card-title">DRE Gerencial — <span id="dre-periodo"></span></div>
+        <div id="dre-content"></div>
+      </div>
+    </div>
+
+    <!-- FLUXO DE CAIXA -->
+    <div class="page" id="page-fluxo">
+      <div class="card">
+        <div class="card-title">Fluxo de Caixa</div>
+        <div id="fluxo-content"></div>
+      </div>
+    </div>
+
+    <!-- CENTRO DE CUSTO -->
+    <div class="page" id="page-centrocusto">
+      <div class="card-title" style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;">Centro de Custo por Cliente</div>
+      <div id="cc-content"></div>
+    </div>
+
+    <!-- CLIENTES & CONTRATOS -->
+    <div class="page" id="page-clientes">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <strong style="font-size:15px;color:var(--brand)">Clientes & Contratos</strong>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalCliente()">+ Novo Cliente</button>
+      </div>
+      <div class="card" style="padding:0;"><div class="table-wrap"><table>
+        <thead><tr><th>Cliente</th><th>Tipo Contrato</th><th>Valor Mensal</th><th>Vencimento</th><th>Retenção</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tb-clientes"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- COLABORADORES -->
+    <div class="page" id="page-colaboradores">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <strong style="font-size:15px;color:var(--brand)">Colaboradores</strong>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalColab()">+ Novo</button>
+      </div>
+      <div class="card" style="padding:0;"><div class="table-wrap"><table>
+        <thead><tr><th>Nome</th><th>Tipo</th><th>Função</th><th>Custo Mensal</th><th>Centro de Custo</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tb-colabs"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- CATEGORIAS -->
+    <div class="page" id="page-despesas-cat">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <strong style="font-size:15px;color:var(--brand)">Categorias de Despesa</strong>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalCat()">+ Nova Categoria</button>
+      </div>
+      <div class="card" style="padding:0;"><div class="table-wrap"><table>
+        <thead><tr><th>Categoria</th><th>Tipo</th><th>Centro de Custo</th><th>Ações</th></tr></thead>
+        <tbody id="tb-cats"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- CONTAS A RECEBER -->
+    <div class="page" id="page-receber">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <strong style="font-size:15px;color:var(--brand)">Contas a Receber</strong>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalReceber()">+ Lançar</button>
+      </div>
+      <div class="card" style="padding:0;"><div class="table-wrap"><table>
+        <thead><tr><th>Descrição</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Retenção</th><th>Valor Líquido</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tb-receber"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- CONTAS A PAGAR -->
+    <div class="page" id="page-pagar">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <strong style="font-size:15px;color:var(--brand)">Contas a Pagar</strong>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalPagar()">+ Lançar</button>
+      </div>
+      <div class="card" style="padding:0;"><div class="table-wrap"><table>
+        <thead><tr><th>Descrição</th><th>Categoria</th><th>Centro de Custo</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tb-pagar"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- FOLHA DE PAGAMENTO -->
+    <div class="page" id="page-folha">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <strong style="font-size:15px;color:var(--brand)">Folha de Pagamento</strong>
+        <button class="btn btn-primary btn-sm" onclick="gerarFolha()">⚡ Gerar Folha do Mês</button>
+      </div>
+      <div class="card" style="padding:0;"><div class="table-wrap"><table>
+        <thead><tr><th>Colaborador</th><th>Tipo</th><th>Função</th><th>Salário Base</th><th>FGTS (8%)</th><th>INSS Emp.</th><th>Total Custo</th><th>Centro Custo</th><th>Status</th><th>Recibo</th></tr></thead>
+        <tbody id="tb-folha"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- IMPOSTOS -->
+    <div class="page" id="page-impostos">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <strong style="font-size:15px;color:var(--brand)">Impostos & DAS</strong>
+        <button class="btn btn-primary btn-sm" onclick="calcularImpostos()">⚡ Calcular DAS</button>
+      </div>
+      <div class="card" style="padding:0;"><div class="table-wrap"><table>
+        <thead><tr><th>Competência</th><th>Receita Bruta</th><th>Alíquota Simples</th><th>DAS</th><th>Retenções Abatidas</th><th>DAS Final</th><th>Vencimento</th><th>Status</th></tr></thead>
+        <tbody id="tb-impostos"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- RECIBOS -->
+    <div class="page" id="page-recibos">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+        <strong style="font-size:15px;color:var(--brand)">Recibos</strong>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalRecibo('cliente')">🧾 Recibo para Cliente</button>
+        <button class="btn btn-orange btn-sm" onclick="abrirModalRecibo('rpa')">📄 Recibo para RPA</button>
+      </div>
+      <div id="recibos-lista"></div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="page" id="page-config">
+      <div class="card">
+        <div class="card-title">Dados da Empresa</div>
+        <div class="form-row">
+          <div class="fg"><label>Razão Social</label><input type="text" id="cfg-nome" value="MJL Serviços e Soluções"></div>
+          <div class="fg"><label>CNPJ</label><input type="text" id="cfg-cnpj" value="46.636.732/0001-73"></div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label>Endereço</label><input type="text" id="cfg-end"></div>
+          <div class="fg"><label>Telefone</label><input type="text" id="cfg-tel" value="(21) 96838-1313"></div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label>E-mail</label><input type="text" id="cfg-email" value="mjlservicosesolucoes@gmail.com"></div>
+          <div class="fg"><label>Regime Tributário</label>
+            <select id="cfg-regime"><option value="simples">Simples Nacional</option><option value="lucro_presumido">Lucro Presumido</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label>Alíquota Simples Nacional (%)</label><input type="number" id="cfg-aliquota" value="6" step="0.01"></div>
+          <div class="fg"><label>Dia vencimento DAS</label><input type="number" id="cfg-das-dia" value="20"></div>
+        </div>
+        <button class="btn btn-primary" onclick="salvarConfig()">Salvar configurações</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAIS -->
+<!-- Modal Cliente -->
+<div id="modal-cliente" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3 id="mc-titulo">Novo Cliente</h3><button class="modal-cls" onclick="fecharModal('modal-cliente')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mc-id">
+    <div class="form-row">
+      <div class="fg"><label>Nome do Cliente *</label><input type="text" id="mc-nome"></div>
+      <div class="fg"><label>CNPJ/CPF</label><input type="text" id="mc-cnpj"></div>
+    </div>
+    <div class="fg"><label>Endereço</label><input type="text" id="mc-end"></div>
+    <div class="form-row">
+      <div class="fg"><label>Responsável</label><input type="text" id="mc-resp"></div>
+      <div class="fg"><label>Telefone</label><input type="text" id="mc-tel"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Tipo de Contrato</label>
+        <select id="mc-tipo"><option value="fixo">Fixo Mensal</option><option value="cobertura">Cobertura de Férias</option><option value="eventual">Eventual</option></select>
+      </div>
+      <div class="fg"><label>Valor Mensal (R$)</label><input type="number" id="mc-valor" step="0.01"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Dia de Vencimento</label><input type="number" id="mc-venc" value="5" min="1" max="31"></div>
+      <div class="fg"><label>Faz Retenção?</label>
+        <select id="mc-retencao"><option value="nao">Não</option><option value="iss">ISS</option><option value="inss">INSS</option><option value="irrf">IRRF</option><option value="multipla">Múltipla</option></select>
+      </div>
+    </div>
+    <div class="fg"><label>% Retenção</label><input type="number" id="mc-perc-ret" value="0" step="0.01"></div>
+    <div class="fg"><label>Serviço Prestado (para recibos/NF)</label><textarea id="mc-servico" style="min-height:60px;" placeholder="Ex: Prestação de serviços de ASG - limpeza e conservação..."></textarea></div>
+    <div class="fg"><label>Observações</label><input type="text" id="mc-obs"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1" onclick="salvarCliente()">Salvar</button>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-cliente')">Cancelar</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Modal Colaborador -->
+<div id="modal-colab" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3 id="mco-titulo">Novo Colaborador</h3><button class="modal-cls" onclick="fecharModal('modal-colab')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mco-id">
+    <div class="form-row">
+      <div class="fg"><label>Nome *</label><input type="text" id="mco-nome"></div>
+      <div class="fg"><label>CPF</label><input type="text" id="mco-cpf"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Tipo *</label>
+        <select id="mco-tipo" onchange="ajustarCamposColab()">
+          <option value="CLT">CLT</option>
+          <option value="RPA">RPA (Autônomo)</option>
+          <option value="PJ">PJ</option>
+        </select>
+      </div>
+      <div class="fg"><label>Função</label>
+        <select id="mco-funcao"><option>ASG</option><option>Porteiro</option><option>Zelador</option><option>Vigia</option><option>Recepcionista</option><option>Outro</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Salário/Valor Base (R$)</label><input type="number" id="mco-salario" step="0.01"></div>
+      <div class="fg"><label>Centro de Custo Principal</label><select id="mco-cc"></select></div>
+    </div>
+    <div id="mco-clt-fields">
+      <div class="form-row">
+        <div class="fg"><label>FGTS (empresa paga 8%)</label><input type="text" id="mco-fgts" readonly style="background:var(--bg);"></div>
+        <div class="fg"><label>INSS Empresa (20% ou Simples)</label><input type="text" id="mco-inss" readonly style="background:var(--bg);"></div>
+      </div>
+      <div class="fg"><label>Total Custo Empresa</label><input type="text" id="mco-total" readonly style="background:var(--brand-light);font-weight:700;"></div>
+    </div>
+    <div class="fg"><label>Banco</label><input type="text" id="mco-banco" placeholder="Ex: Nubank, Bradesco..."></div>
+    <div class="form-row">
+      <div class="fg"><label>Agência</label><input type="text" id="mco-ag"></div>
+      <div class="fg"><label>Conta</label><input type="text" id="mco-conta"></div>
+    </div>
+    <div class="fg"><label>PIX</label><input type="text" id="mco-pix"></div>
+    <div style="display:flex;gap:10px;margin-top:4px;">
+      <button class="btn btn-primary" style="flex:1" onclick="salvarColab()">Salvar</button>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-colab')">Cancelar</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Modal Categoria -->
+<div id="modal-cat" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3>Nova Categoria</h3><button class="modal-cls" onclick="fecharModal('modal-cat')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mcat-id">
+    <div class="fg"><label>Nome da Categoria *</label><input type="text" id="mcat-nome" placeholder="Ex: Aluguel, Contador, Transporte..."></div>
+    <div class="form-row">
+      <div class="fg"><label>Tipo</label>
+        <select id="mcat-tipo">
+          <option value="fixo">Despesa Fixa</option>
+          <option value="variavel">Despesa Variável</option>
+          <option value="pessoal">Pessoal (Folha)</option>
+          <option value="imposto">Imposto/Tributo</option>
+          <option value="receita">Receita</option>
+        </select>
+      </div>
+      <div class="fg"><label>Centro de Custo</label>
+        <select id="mcat-cc">
+          <option value="adm">Administrativo</option>
+          <option value="cliente">Por Cliente</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1" onclick="salvarCat()">Salvar</button>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-cat')">Cancelar</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Modal Conta a Receber -->
+<div id="modal-receber" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3 id="mr-titulo">Conta a Receber</h3><button class="modal-cls" onclick="fecharModal('modal-receber')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mr-id">
+    <div class="form-row">
+      <div class="fg"><label>Cliente *</label><select id="mr-cliente" onchange="preencherDadosCliente()"></select></div>
+      <div class="fg"><label>Competência</label><input type="month" id="mr-competencia"></div>
+    </div>
+    <div class="fg"><label>Descrição</label><input type="text" id="mr-desc" placeholder="Ex: Serviços de ASG - Junho/2026"></div>
+    <div class="form-row">
+      <div class="fg"><label>Valor Bruto (R$)</label><input type="number" id="mr-valor" step="0.01" oninput="calcularLiquidoReceber()"></div>
+      <div class="fg"><label>Vencimento</label><input type="date" id="mr-venc"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Retenção (%)</label><input type="number" id="mr-ret-perc" value="0" step="0.01" oninput="calcularLiquidoReceber()"></div>
+      <div class="fg"><label>Valor Líquido</label><input type="text" id="mr-liquido" readonly style="background:var(--green-light);font-weight:700;"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Status</label>
+        <select id="mr-status">
+          <option value="pendente">Pendente</option>
+          <option value="recebido">Recebido</option>
+          <option value="atraso">Em Atraso</option>
+          <option value="parcial">Parcialmente Recebido</option>
+        </select>
+      </div>
+      <div class="fg"><label>Data Recebimento</label><input type="date" id="mr-data-rec"></div>
+    </div>
+    <div class="fg"><label>Observações</label><input type="text" id="mr-obs"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1" onclick="salvarReceber()">Salvar</button>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-receber')">Cancelar</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Modal Conta a Pagar -->
+<div id="modal-pagar" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3 id="mp-titulo">Conta a Pagar</h3><button class="modal-cls" onclick="fecharModal('modal-pagar')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mp-id">
+    <div class="form-row">
+      <div class="fg"><label>Descrição *</label><input type="text" id="mp-desc"></div>
+      <div class="fg"><label>Categoria</label><select id="mp-cat"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Valor (R$)</label><input type="number" id="mp-valor" step="0.01"></div>
+      <div class="fg"><label>Vencimento</label><input type="date" id="mp-venc"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Centro de Custo</label><select id="mp-cc"></select></div>
+      <div class="fg"><label>Recorrência</label>
+        <select id="mp-recorr"><option value="unica">Única</option><option value="mensal">Mensal</option><option value="anual">Anual</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Status</label>
+        <select id="mp-status"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="atraso">Em Atraso</option></select>
+      </div>
+      <div class="fg"><label>Data Pagamento</label><input type="date" id="mp-data-pag"></div>
+    </div>
+    <div class="fg"><label>Observações</label><input type="text" id="mp-obs"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1" onclick="salvarPagar()">Salvar</button>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-pagar')">Cancelar</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Modal Recibo -->
+<div id="modal-recibo" class="modal-overlay hidden"><div class="modal" style="max-width:620px;">
+  <div class="modal-hdr"><h3 id="mrec-titulo">Gerar Recibo</h3><button class="modal-cls" onclick="fecharModal('modal-recibo')">×</button></div>
+  <div class="modal-body">
+    <div id="mrec-form-cliente" class="hidden">
+      <div class="form-row">
+        <div class="fg"><label>Cliente *</label><select id="mrec-cliente"></select></div>
+        <div class="fg"><label>Competência</label><input type="month" id="mrec-comp"></div>
+      </div>
+      <div class="fg"><label>Descrição do Serviço</label><textarea id="mrec-servico" style="min-height:70px;"></textarea></div>
+      <div class="form-row">
+        <div class="fg"><label>Valor (R$)</label><input type="number" id="mrec-valor" step="0.01" oninput="previewRecibo()"></div>
+        <div class="fg"><label>Número do Recibo</label><input type="text" id="mrec-num"></div>
+      </div>
+    </div>
+    <div id="mrec-form-rpa" class="hidden">
+      <div class="form-row">
+        <div class="fg"><label>Colaborador RPA *</label><select id="mrec-rpa"></select></div>
+        <div class="fg"><label>Competência</label><input type="month" id="mrec-rpa-comp"></div>
+      </div>
+      <div class="fg"><label>Descrição do Serviço</label><textarea id="mrec-rpa-servico" style="min-height:70px;" placeholder="Ex: Prestação de serviços de limpeza e conservação..."></textarea></div>
+      <div class="form-row">
+        <div class="fg"><label>Valor (R$)</label><input type="number" id="mrec-rpa-valor" step="0.01"></div>
+        <div class="fg"><label>Número do Recibo</label><input type="text" id="mrec-rpa-num"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px;">
+      <button class="btn btn-primary" style="flex:1" onclick="gerarRecibo()">📄 Gerar Recibo</button>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-recibo')">Cancelar</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Área de Impressão -->
+<div id="print-area"></div>
+
+<script>
+// ================================================================
+// MJL ERP FINANCEIRO
+// ================================================================
+const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DIAS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+let ERP = {
+  config:{nome:'MJL Serviços e Soluções',cnpj:'46.636.732/0001-73',email:'mjlservicosesolucoes@gmail.com',tel:'(21) 96838-1313',regime:'simples',aliquota:6,dasDia:20},
+  clientes:[], colaboradores:[], categorias:[], receber:[], pagar:[], folhas:[], impostos:[], recibos:[]
+};
+
+function salvarERP(){ localStorage.setItem('mjl_erp_v1', JSON.stringify(ERP)); }
+function carregarERP(){ const r=localStorage.getItem('mjl_erp_v1'); if(r) ERP=JSON.parse(r); }
+function gid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function fmt(v){ return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtPerc(v){ return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%'; }
+
+// NAV
+const titulos={dashboard:'Dashboard Financeiro',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',
+  'despesas-cat':'Categorias de Despesa',receber:'Contas a Receber',pagar:'Contas a Pagar',folha:'Folha de Pagamento',impostos:'Impostos & DAS',recibos:'Recibos',config:'Configurações'};
+const novoBtns={clientes:true,colaboradores:true,'despesas-cat':true,receber:true,pagar:true,recibos:true};
+const novoFns={clientes:()=>abrirModalCliente(),colaboradores:()=>abrirModalColab(),'despesas-cat':()=>abrirModalCat(),receber:()=>abrirModalReceber(),pagar:()=>abrirModalPagar()};
+
+function navegar(p){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  document.querySelector('[data-page="'+p+'"]').classList.add('active');
+  document.getElementById('page-title').textContent=titulos[p]||'';
+  const btnNovo=document.getElementById('btn-novo');
+  btnNovo.style.display=novoBtns[p]?'':'none';
+  if(novoFns[p]) btnNovo.onclick=novoFns[p];
+  if(p==='dashboard') renderDash();
+  if(p==='dre') renderDRE();
+  if(p==='fluxo') renderFluxo();
+  if(p==='centrocusto') renderCC();
+  if(p==='clientes') renderClientes();
+  if(p==='colaboradores') renderColabs();
+  if(p==='despesas-cat') renderCats();
+  if(p==='receber') renderReceber();
+  if(p==='pagar') renderPagar();
+  if(p==='folha') renderFolha();
+  if(p==='impostos') renderImpostos();
+  if(p==='recibos') renderRecibos();
+  if(p==='config') carregarConfig();
+}
+document.querySelectorAll('[data-page]').forEach(a=>a.addEventListener('click',()=>navegar(a.dataset.page)));
+
+// MÊS FILTRO
+function popularFiltroMes(){
+  const sel=document.getElementById('filtro-mes');
+  const hoje=new Date();
+  let opts='';
+  for(let i=0;i<12;i++){
+    const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
+    const val=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    opts+=`<option value="${val}">${MESES[d.getMonth()]} ${d.getFullYear()}</option>`;
+  }
+  sel.innerHTML=opts;
+}
+function getMesSel(){ return document.getElementById('filtro-mes').value; }
+function atualizarTudo(){ const p=document.querySelector('.page.active')?.id?.replace('page-',''); if(p) navegar(p); }
+
+// HELPERS FINANCEIROS
+function getReceberMes(mes){
+  return ERP.receber.filter(r=>r.competencia===mes||r.vencimento?.slice(0,7)===mes);
+}
+function getPagarMes(mes){
+  return ERP.pagar.filter(p=>p.vencimento?.slice(0,7)===mes);
+}
+function totalReceitaBruta(mes){
+  return getReceberMes(mes).reduce((s,r)=>s+Number(r.valor||0),0);
+}
+function totalPago(mes){
+  return getPagarMes(mes).reduce((s,p)=>s+Number(p.valor||0),0);
+}
+function totalRetencoes(mes){
+  return getReceberMes(mes).reduce((s,r)=>s+Number(r.valor||0)*Number(r.retencaoPerc||0)/100,0);
+}
+
+// ================================================================
+// DASHBOARD
+// ================================================================
+function renderDash(){
+  const mes=getMesSel();
+  const recBruta=totalReceitaBruta(mes);
+  const retencoes=totalRetencoes(mes);
+  const recLiq=recBruta-retencoes;
+  const custos=totalPago(mes);
+  const resultado=recLiq-custos;
+  const margem=recBruta>0?(resultado/recBruta*100):0;
+  const pendente=ERP.receber.filter(r=>r.status==='pendente').reduce((s,r)=>s+Number(r.valor||0),0);
+  const atraso=ERP.receber.filter(r=>r.status==='atraso').reduce((s,r)=>s+Number(r.valor||0),0);
+
+  document.getElementById('st-receita').textContent=fmt(recBruta);
+  document.getElementById('st-pagar').textContent=fmt(custos);
+  document.getElementById('st-resultado').textContent=fmt(resultado);
+  document.getElementById('st-resultado').style.color=resultado>=0?'var(--green)':'var(--red)';
+  document.getElementById('st-margem').textContent=fmtPerc(margem);
+  document.getElementById('st-margem').style.color=margem>=0?'var(--green)':'var(--red)';
+  document.getElementById('st-areceber').textContent=fmt(pendente);
+  document.getElementById('st-atraso').textContent=fmt(atraso);
+
+  // Receitas por cliente
+  const porCliente={};
+  getReceberMes(mes).forEach(r=>{
+    const nome=ERP.clientes.find(c=>c.id===r.clienteId)?.nome||r.clienteNome||'Outros';
+    porCliente[nome]=(porCliente[nome]||0)+Number(r.valor||0);
+  });
+  document.getElementById('dash-clientes').innerHTML=Object.entries(porCliente).length?
+    Object.entries(porCliente).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <span>${n}</span><strong style="color:var(--green)">${fmt(v)}</strong>
+      </div>`).join(''):'<p style="color:var(--text3);font-size:13px;">Nenhuma receita lançada.</p>';
+
+  // Custos
+  const porCat={};
+  getPagarMes(mes).forEach(p=>{
+    const cat=ERP.categorias.find(c=>c.id===p.catId)?.nome||p.catNome||'Outros';
+    porCat[cat]=(porCat[cat]||0)+Number(p.valor||0);
+  });
+  document.getElementById('dash-custos').innerHTML=Object.entries(porCat).length?
+    Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <span>${n}</span><strong style="color:var(--red)">${fmt(v)}</strong>
+      </div>`).join(''):'<p style="color:var(--text3);font-size:13px;">Nenhuma despesa lançada.</p>';
+
+  // Vencimentos próximos
+  const hoje=new Date();
+  const em7=new Date(); em7.setDate(em7.getDate()+7);
+  const prox=[...ERP.receber.filter(r=>r.status==='pendente'&&new Date(r.vencimento)<=em7).map(r=>({...r,tipo:'receber'})),
+              ...ERP.pagar.filter(p=>p.status==='pendente'&&new Date(p.vencimento)<=em7).map(p=>({...p,tipo:'pagar'}))];
+  prox.sort((a,b)=>new Date(a.vencimento)-new Date(b.vencimento));
+  document.getElementById('dash-vencimentos').innerHTML=prox.length?
+    prox.map(i=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <div><span class="badge ${i.tipo==='receber'?'b-green':'b-red'}" style="margin-right:8px;">${i.tipo==='receber'?'↓ Receber':'↑ Pagar'}</span>${i.desc||i.clienteNome||''}</div>
+      <div style="text-align:right;"><div style="font-weight:700;color:${i.tipo==='receber'?'var(--green)':'var(--red)'};">${fmt(i.valor)}</div><div style="font-size:11px;color:var(--text3);">${new Date(i.vencimento+'T12:00').toLocaleDateString('pt-BR')}</div></div>
+    </div>`).join(''):'<p style="color:var(--text3);font-size:13px;">Nenhum vencimento nos próximos 7 dias.</p>';
+}
+
+// ================================================================
+// DRE
+// ================================================================
+function renderDRE(){
+  const mes=getMesSel();
+  const [ano,m]=mes.split('-');
+  document.getElementById('dre-periodo').textContent=MESES[Number(m)-1]+' '+ano;
+  const recBruta=totalReceitaBruta(mes);
+  const retencoes=totalRetencoes(mes);
+  const recLiq=recBruta-retencoes;
+  const aliq=Number(ERP.config.aliquota||6)/100;
+  const das=recBruta*aliq;
+
+  // Separar custos por categoria
+  const pags=getPagarMes(mes);
+  const folhaCLT=pags.filter(p=>ERP.categorias.find(c=>c.id===p.catId)?.tipo==='pessoal'||p.catNome?.toLowerCase().includes('folha')).reduce((s,p)=>s+Number(p.valor||0),0);
+  const impostosPags=pags.filter(p=>ERP.categorias.find(c=>c.id===p.catId)?.tipo==='imposto').reduce((s,p)=>s+Number(p.valor||0),0);
+  const desp_fixas=pags.filter(p=>ERP.categorias.find(c=>c.id===p.catId)?.tipo==='fixo').reduce((s,p)=>s+Number(p.valor||0),0);
+  const desp_var=pags.filter(p=>ERP.categorias.find(c=>c.id===p.catId)?.tipo==='variavel').reduce((s,p)=>s+Number(p.valor||0),0);
+  const total_custos=totalPago(mes);
+  const lbr=recLiq-folhaCLT-das;
+  const resultado=recLiq-total_custos;
+  const margem=recBruta>0?(resultado/recBruta*100):0;
+
+  document.getElementById('dre-content').innerHTML=`
+    <div class="dre-section">
+      <div class="dre-row header"><span>RECEITAS</span><span></span></div>
+      <div class="dre-row"><span>Receita Bruta de Serviços</span><span>${fmt(recBruta)}</span></div>
+      <div class="dre-row deducao"><span>(−) Retenções na Fonte</span><span>(${fmt(retencoes)})</span></div>
+      <div class="dre-row deducao"><span>(−) DAS / Simples Nacional (${ERP.config.aliquota}%)</span><span>(${fmt(das)})</span></div>
+      <div class="dre-row total"><span>= RECEITA LÍQUIDA</span><span>${fmt(recLiq-das)}</span></div>
+    </div>
+    <div class="dre-section" style="margin-top:12px;">
+      <div class="dre-row header"><span>CUSTOS OPERACIONAIS</span><span></span></div>
+      <div class="dre-row sub"><span>Folha de Pagamento (CLT + encargos)</span><span>${fmt(folhaCLT)}</span></div>
+      <div class="dre-row sub"><span>Impostos e Encargos</span><span>${fmt(impostosPags)}</span></div>
+      <div class="dre-row total"><span>= LUCRO BRUTO</span><span style="color:${lbr>=0?'var(--green)':'var(--red)'}">${fmt(lbr)}</span></div>
+    </div>
+    <div class="dre-section" style="margin-top:12px;">
+      <div class="dre-row header"><span>DESPESAS OPERACIONAIS</span><span></span></div>
+      <div class="dre-row sub"><span>Despesas Fixas (aluguel, contador, etc)</span><span>${fmt(desp_fixas)}</span></div>
+      <div class="dre-row sub"><span>Despesas Variáveis</span><span>${fmt(desp_var)}</span></div>
+      <div class="dre-row total"><span>Total Despesas</span><span>${fmt(desp_fixas+desp_var)}</span></div>
+    </div>
+    <div class="dre-section" style="margin-top:12px;">
+      <div class="dre-row ${resultado>=0?'lucro':'prejuizo'}">
+        <span>${resultado>=0?'✅ RESULTADO LÍQUIDO (LUCRO)':'❌ RESULTADO LÍQUIDO (PREJUÍZO)'}</span>
+        <span>${fmt(resultado)}</span>
+      </div>
+      <div class="dre-row" style="background:var(--bg);">
+        <span>Margem Líquida</span>
+        <span style="font-weight:700;color:${margem>=0?'var(--green)':'var(--red)'}">${fmtPerc(margem)}</span>
+      </div>
+    </div>
+  `;
+}
+
+// ================================================================
+// FLUXO DE CAIXA
+// ================================================================
+function renderFluxo(){
+  const mes=getMesSel();
+  const recMes=getReceberMes(mes);
+  const pagMes=getPagarMes(mes);
+  const totalE=recMes.filter(r=>r.status==='recebido').reduce((s,r)=>s+Number(r.valor||0),0);
+  const totalS=pagMes.filter(p=>p.status==='pago').reduce((s,p)=>s+Number(p.valor||0),0);
+  const prevE=recMes.filter(r=>r.status==='pendente').reduce((s,r)=>s+Number(r.valor||0),0);
+  const prevS=pagMes.filter(p=>p.status==='pendente').reduce((s,p)=>s+Number(p.valor||0),0);
+  const saldo=totalE-totalS;
+  const saldoPrev=saldo+(prevE-prevS);
+
+  document.getElementById('fluxo-content').innerHTML=`
+    <div class="stat-grid" style="margin-bottom:20px;">
+      <div class="stat"><div class="lbl">Entradas Realizadas</div><div class="val" style="color:var(--green)">${fmt(totalE)}</div></div>
+      <div class="stat"><div class="lbl">Saídas Realizadas</div><div class="val" style="color:var(--red)">${fmt(totalS)}</div></div>
+      <div class="stat"><div class="lbl">Saldo Atual</div><div class="val" style="color:${saldo>=0?'var(--green)':'var(--red)'}">${fmt(saldo)}</div></div>
+      <div class="stat"><div class="lbl">Saldo Previsto</div><div class="val" style="color:${saldoPrev>=0?'var(--green)':'var(--red)'}">${fmt(saldoPrev)}</div></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <div class="dre-row header"><span>ENTRADAS</span><span>Valor</span></div>
+      ${recMes.map(r=>`<div class="dre-row ${r.status==='recebido'?'':'sub'}">
+        <span>${r.clienteNome||''} — ${r.desc||''} <span class="badge ${r.status==='recebido'?'b-green':r.status==='atraso'?'b-red':'b-yellow'}">${r.status}</span></span>
+        <span>${fmt(r.valor)}</span>
+      </div>`).join('')||'<div class="dre-row sub"><span>Nenhuma entrada</span><span>—</span></div>'}
+      <div class="dre-row total"><span>Total Entradas</span><span>${fmt(totalE+prevE)}</span></div>
+    </div>
+    <div>
+      <div class="dre-row header"><span>SAÍDAS</span><span>Valor</span></div>
+      ${pagMes.map(p=>`<div class="dre-row ${p.status==='pago'?'':'sub'}">
+        <span>${p.desc||''} <span class="badge ${p.status==='pago'?'b-green':p.status==='atraso'?'b-red':'b-yellow'}">${p.status}</span></span>
+        <span style="color:var(--red)">${fmt(p.valor)}</span>
+      </div>`).join('')||'<div class="dre-row sub"><span>Nenhuma saída</span><span>—</span></div>'}
+      <div class="dre-row total"><span>Total Saídas</span><span style="color:var(--red)">${fmt(totalS+prevS)}</span></div>
+    </div>
+  `;
+}
+
+// ================================================================
+// CENTRO DE CUSTO
+// ================================================================
+function renderCC(){
+  const mes=getMesSel();
+  const clientes=ERP.clientes.filter(c=>c.ativo!==false);
+  const el=document.getElementById('cc-content');
+  if(!clientes.length){el.innerHTML='<p style="color:var(--text3)">Nenhum cliente cadastrado.</p>';return;}
+
+  let html='';
+  clientes.forEach(cli=>{
+    const rec=ERP.receber.filter(r=>(r.clienteId===cli.id)&&(r.competencia===mes||r.vencimento?.slice(0,7)===mes));
+    const receita=rec.reduce((s,r)=>s+Number(r.valor||0),0);
+    const retencao=rec.reduce((s,r)=>s+Number(r.valor||0)*Number(r.retencaoPerc||0)/100,0);
+    const pag=ERP.pagar.filter(p=>p.ccId===cli.id&&p.vencimento?.slice(0,7)===mes);
+    const custos=pag.reduce((s,p)=>s+Number(p.valor||0),0);
+    const das=receita*Number(ERP.config.aliquota||6)/100;
+    const margem=receita-(custos+das+retencao);
+    const percMargem=receita>0?(margem/receita*100):0;
+    html+=`<div class="cc-card">
+      <div class="cc-hdr"><h4>🏢 ${cli.nome}</h4><span style="font-size:12px;opacity:.8;">${cli.tipoContrato||'Fixo'}</span></div>
+      <div class="cc-body">
+        <div class="cc-linha"><span>Receita Bruta</span><strong style="color:var(--green)">${fmt(receita)}</strong></div>
+        <div class="cc-linha"><span>(−) Retenções na Fonte</span><span style="color:var(--red)">(${fmt(retencao)})</span></div>
+        <div class="cc-linha"><span>(−) DAS/Simples (${ERP.config.aliquota}%)</span><span style="color:var(--red)">(${fmt(das)})</span></div>
+        <div class="cc-linha"><span>(−) Custos Diretos (folha, etc)</span><span style="color:var(--red)">(${fmt(custos)})</span></div>
+        <div class="cc-total"><span>Margem do Cliente</span><strong class="${margem>=0?'margem-pos':'margem-neg'}">${fmt(margem)} (${fmtPerc(percMargem)})</strong></div>
+      </div>
+    </div>`;
+  });
+
+  // ADM geral
+  const pagAdm=ERP.pagar.filter(p=>!p.ccId&&p.vencimento?.slice(0,7)===mes);
+  const custosAdm=pagAdm.reduce((s,p)=>s+Number(p.valor||0),0);
+  if(custosAdm>0){
+    html+=`<div class="cc-card">
+      <div class="cc-hdr" style="background:var(--text2);"><h4>⚙️ Administrativo Geral</h4></div>
+      <div class="cc-body">
+        ${pagAdm.map(p=>`<div class="cc-linha"><span>${p.desc}</span><span style="color:var(--red)">${fmt(p.valor)}</span></div>`).join('')}
+        <div class="cc-total"><span>Total ADM</span><strong style="color:var(--red)">${fmt(custosAdm)}</strong></div>
+      </div>
+    </div>`;
+  }
+  el.innerHTML=html;
+}
+
+// ================================================================
+// CLIENTES
+// ================================================================
+function abrirModalCliente(id){
+  if(id){
+    const c=ERP.clientes.find(x=>x.id===id);
+    document.getElementById('mc-titulo').textContent='Editar Cliente';
+    document.getElementById('mc-id').value=c.id;
+    document.getElementById('mc-nome').value=c.nome||'';
+    document.getElementById('mc-cnpj').value=c.cnpj||'';
+    document.getElementById('mc-end').value=c.end||'';
+    document.getElementById('mc-resp').value=c.resp||'';
+    document.getElementById('mc-tel').value=c.tel||'';
+    document.getElementById('mc-tipo').value=c.tipoContrato||'fixo';
+    document.getElementById('mc-valor').value=c.valorMensal||'';
+    document.getElementById('mc-venc').value=c.diaVenc||5;
+    document.getElementById('mc-retencao').value=c.retencao||'nao';
+    document.getElementById('mc-perc-ret').value=c.retencaoPerc||0;
+    document.getElementById('mc-servico').value=c.servico||'';
+    document.getElementById('mc-obs').value=c.obs||'';
+  } else {
+    document.getElementById('mc-titulo').textContent='Novo Cliente';
+    document.getElementById('mc-id').value='';
+    ['mc-nome','mc-cnpj','mc-end','mc-resp','mc-tel','mc-servico','mc-obs'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('mc-tipo').value='fixo';
+    document.getElementById('mc-valor').value='';
+    document.getElementById('mc-venc').value=5;
+    document.getElementById('mc-retencao').value='nao';
+    document.getElementById('mc-perc-ret').value=0;
+  }
+  document.getElementById('modal-cliente').classList.remove('hidden');
+}
+
+function salvarCliente(){
+  const nome=document.getElementById('mc-nome').value.trim();
+  if(!nome){alert('Informe o nome do cliente.');return;}
+  const id=document.getElementById('mc-id').value;
+  const obj={id:id||gid(),nome,cnpj:document.getElementById('mc-cnpj').value.trim(),
+    end:document.getElementById('mc-end').value.trim(),resp:document.getElementById('mc-resp').value.trim(),
+    tel:document.getElementById('mc-tel').value.trim(),tipoContrato:document.getElementById('mc-tipo').value,
+    valorMensal:Number(document.getElementById('mc-valor').value||0),
+    diaVenc:Number(document.getElementById('mc-venc').value||5),
+    retencao:document.getElementById('mc-retencao').value,
+    retencaoPerc:Number(document.getElementById('mc-perc-ret').value||0),
+    servico:document.getElementById('mc-servico').value.trim(),
+    obs:document.getElementById('mc-obs').value.trim(),ativo:true};
+  if(id){const i=ERP.clientes.findIndex(x=>x.id===id);ERP.clientes[i]=obj;}else ERP.clientes.push(obj);
+  salvarERP();fecharModal('modal-cliente');renderClientes();popularSelectsClientes();
+}
+
+function renderClientes(){
+  const tb=document.getElementById('tb-clientes');
+  if(!ERP.clientes.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Nenhum cliente.</td></tr>';return;}
+  tb.innerHTML=ERP.clientes.map(c=>`<tr>
+    <td><strong>${c.nome}</strong>${c.cnpj?`<div style="font-size:11px;color:var(--text3)">${c.cnpj}</div>`:''}</td>
+    <td><span class="badge b-blue">${c.tipoContrato==='fixo'?'Fixo Mensal':c.tipoContrato==='cobertura'?'Cobertura':'Eventual'}</span></td>
+    <td><strong style="color:var(--green)">${fmt(c.valorMensal)}</strong></td>
+    <td>Dia ${c.diaVenc||5}</td>
+    <td>${c.retencao==='nao'?'<span class="badge b-gray">Não</span>':`<span class="badge b-yellow">${c.retencao.toUpperCase()} ${c.retencaoPerc}%</span>`}</td>
+    <td><span class="badge ${c.ativo!==false?'b-green':'b-gray'}">${c.ativo!==false?'Ativo':'Inativo'}</span></td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-ghost btn-sm" onclick="abrirModalCliente('${c.id}')">✏️</button>
+      <button class="btn btn-primary btn-sm" onclick="lancarReceitaCliente('${c.id}')">💰</button>
+      <button class="btn btn-orange btn-sm" onclick="gerarReciboCliente('${c.id}')">🧾</button>
+    </td>
+  </tr>`).join('');
+}
+
+function lancarReceitaCliente(id){
+  const c=ERP.clientes.find(x=>x.id===id);if(!c)return;
+  const hoje=new Date();
+  document.getElementById('mr-cliente').value=id;
+  document.getElementById('mr-desc').value=`Serviços de ${c.servico||'limpeza e conservação'} — ${MESES[hoje.getMonth()]}/${hoje.getFullYear()}`;
+  document.getElementById('mr-valor').value=c.valorMensal;
+  document.getElementById('mr-ret-perc').value=c.retencaoPerc||0;
+  document.getElementById('mr-competencia').value=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
+  const venc=new Date(hoje.getFullYear(),hoje.getMonth(),c.diaVenc||5);
+  document.getElementById('mr-venc').value=venc.toISOString().slice(0,10);
+  document.getElementById('mr-status').value='pendente';
+  calcularLiquidoReceber();
+  abrirModalReceber();
+}
+
+// ================================================================
+// COLABORADORES
+// ================================================================
+function ajustarCamposColab(){
+  const tipo=document.getElementById('mco-tipo').value;
+  const clt=document.getElementById('mco-clt-fields');
+  clt.style.display=tipo==='CLT'?'block':'none';
+  calcularCustoColab();
+}
+
+function calcularCustoColab(){
+  const sal=Number(document.getElementById('mco-salario').value||0);
+  const fgts=sal*0.08;
+  const inss=sal*0.20;
+  const total=sal+fgts+inss;
+  document.getElementById('mco-fgts').value=fmt(fgts);
+  document.getElementById('mco-inss').value=fmt(inss);
+  document.getElementById('mco-total').value=fmt(total);
+}
+
+function abrirModalColab(id){
+  popularSelectsClientes();
+  const ccSel=document.getElementById('mco-cc');
+  ccSel.innerHTML='<option value="">— Sem centro de custo fixo —</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  if(id){
+    const c=ERP.colaboradores.find(x=>x.id===id);
+    document.getElementById('mco-titulo').textContent='Editar Colaborador';
+    document.getElementById('mco-id').value=c.id;
+    document.getElementById('mco-nome').value=c.nome||'';
+    document.getElementById('mco-cpf').value=c.cpf||'';
+    document.getElementById('mco-tipo').value=c.tipo||'CLT';
+    document.getElementById('mco-funcao').value=c.funcao||'ASG';
+    document.getElementById('mco-salario').value=c.salario||'';
+    document.getElementById('mco-cc').value=c.ccId||'';
+    document.getElementById('mco-banco').value=c.banco||'';
+    document.getElementById('mco-ag').value=c.agencia||'';
+    document.getElementById('mco-conta').value=c.conta||'';
+    document.getElementById('mco-pix').value=c.pix||'';
+  } else {
+    document.getElementById('mco-titulo').textContent='Novo Colaborador';
+    document.getElementById('mco-id').value='';
+    ['mco-nome','mco-cpf','mco-salario','mco-banco','mco-ag','mco-conta','mco-pix'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('mco-tipo').value='CLT';
+    document.getElementById('mco-funcao').value='ASG';
+    document.getElementById('mco-cc').value='';
+  }
+  ajustarCamposColab();
+  document.getElementById('mco-salario').addEventListener('input',calcularCustoColab);
+  document.getElementById('modal-colab').classList.remove('hidden');
+}
+
+function salvarColab(){
+  const nome=document.getElementById('mco-nome').value.trim();
+  if(!nome){alert('Informe o nome.');return;}
+  const id=document.getElementById('mco-id').value;
+  const sal=Number(document.getElementById('mco-salario').value||0);
+  const tipo=document.getElementById('mco-tipo').value;
+  const fgts=tipo==='CLT'?sal*0.08:0;
+  const inss=tipo==='CLT'?sal*0.20:0;
+  const obj={id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),
+    tipo,funcao:document.getElementById('mco-funcao').value,
+    salario:sal,fgts,inss,custoTotal:sal+fgts+inss,
+    ccId:document.getElementById('mco-cc').value,
+    banco:document.getElementById('mco-banco').value.trim(),
+    agencia:document.getElementById('mco-ag').value.trim(),
+    conta:document.getElementById('mco-conta').value.trim(),
+    pix:document.getElementById('mco-pix').value.trim(),ativo:true};
+  if(id){const i=ERP.colaboradores.findIndex(x=>x.id===id);ERP.colaboradores[i]=obj;}else ERP.colaboradores.push(obj);
+  salvarERP();fecharModal('modal-colab');renderColabs();
+}
+
+function renderColabs(){
+  const tb=document.getElementById('tb-colabs');
+  if(!ERP.colaboradores.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Nenhum colaborador.</td></tr>';return;}
+  tb.innerHTML=ERP.colaboradores.map(c=>`<tr>
+    <td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td>
+    <td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span></td>
+    <td>${c.funcao||'—'}</td>
+    <td>
+      <div style="font-weight:700">${fmt(c.salario)}</div>
+      ${c.tipo==='CLT'?`<div style="font-size:11px;color:var(--text3)">Custo total: ${fmt(c.custoTotal)}</div>`:''}
+    </td>
+    <td>${ERP.clientes.find(cl=>cl.id===c.ccId)?.nome||'<span style="color:var(--text3)">ADM</span>'}</td>
+    <td><span class="badge ${c.ativo!==false?'b-green':'b-gray'}">${c.ativo!==false?'Ativo':'Inativo'}</span></td>
+    <td>
+      <button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button>
+      ${c.tipo==='RPA'?`<button class="btn btn-orange btn-sm" onclick="gerarReciboRPA('${c.id}')">🧾 RPA</button>`:''}
+    </td>
+  </tr>`).join('');
+}
+
+// ================================================================
+// CATEGORIAS
+// ================================================================
+function abrirModalCat(id){
+  if(id){
+    const c=ERP.categorias.find(x=>x.id===id);
+    document.getElementById('mcat-id').value=c.id;
+    document.getElementById('mcat-nome').value=c.nome;
+    document.getElementById('mcat-tipo').value=c.tipo;
+    document.getElementById('mcat-cc').value=c.cc||'adm';
+  } else {
+    document.getElementById('mcat-id').value='';
+    document.getElementById('mcat-nome').value='';
+    document.getElementById('mcat-tipo').value='fixo';
+    document.getElementById('mcat-cc').value='adm';
+  }
+  document.getElementById('modal-cat').classList.remove('hidden');
+}
+
+function salvarCat(){
+  const nome=document.getElementById('mcat-nome').value.trim();
+  if(!nome)return;
+  const id=document.getElementById('mcat-id').value;
+  const obj={id:id||gid(),nome,tipo:document.getElementById('mcat-tipo').value,cc:document.getElementById('mcat-cc').value};
+  if(id){const i=ERP.categorias.findIndex(x=>x.id===id);ERP.categorias[i]=obj;}else ERP.categorias.push(obj);
+  salvarERP();fecharModal('modal-cat');renderCats();popularSelectsCats();
+}
+
+function renderCats(){
+  const tb=document.getElementById('tb-cats');
+  const tipos={fixo:'Despesa Fixa',variavel:'Variável',pessoal:'Pessoal',imposto:'Imposto',receita:'Receita'};
+  if(!ERP.categorias.length){tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px">Nenhuma categoria.</td></tr>';return;}
+  tb.innerHTML=ERP.categorias.map(c=>`<tr>
+    <td><strong>${c.nome}</strong></td>
+    <td><span class="badge ${c.tipo==='receita'?'b-green':c.tipo==='imposto'?'b-red':c.tipo==='pessoal'?'b-blue':'b-gray'}">${tipos[c.tipo]||c.tipo}</span></td>
+    <td>${c.cc==='cliente'?'Por Cliente':'Administrativo'}</td>
+    <td><button class="btn btn-ghost btn-sm" onclick="abrirModalCat('${c.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="excluirCat('${c.id}')">🗑️</button></td>
+  </tr>`).join('');
+}
+
+function excluirCat(id){if(!confirm('Excluir?'))return;ERP.categorias=ERP.categorias.filter(x=>x.id!==id);salvarERP();renderCats();}
+
+// ================================================================
+// CONTAS A RECEBER
+// ================================================================
+function popularSelectsClientes(){
+  ['mr-cliente','mrec-cliente'].forEach(sid=>{
+    const sel=document.getElementById(sid);if(!sel)return;
+    const val=sel.value;
+    sel.innerHTML='<option value="">Selecione...</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+    sel.value=val;
+  });
+}
+
+function popularSelectsCats(){
+  const sel=document.getElementById('mp-cat');if(!sel)return;
+  sel.innerHTML='<option value="">Sem categoria</option>'+ERP.categorias.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+}
+
+function popularSelectsCC(){
+  ['mp-cc'].forEach(sid=>{
+    const sel=document.getElementById(sid);if(!sel)return;
+    sel.innerHTML='<option value="">Administrativo Geral</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  });
+}
+
+function preencherDadosCliente(){
+  const id=document.getElementById('mr-cliente').value;
+  const c=ERP.clientes.find(x=>x.id===id);
+  if(c){
+    document.getElementById('mr-valor').value=c.valorMensal||'';
+    document.getElementById('mr-ret-perc').value=c.retencaoPerc||0;
+    calcularLiquidoReceber();
+  }
+}
+
+function calcularLiquidoReceber(){
+  const v=Number(document.getElementById('mr-valor').value||0);
+  const p=Number(document.getElementById('mr-ret-perc').value||0);
+  const liq=v-(v*p/100);
+  document.getElementById('mr-liquido').value=fmt(liq);
+}
+
+function abrirModalReceber(id){
+  popularSelectsClientes();
+  if(id){
+    const r=ERP.receber.find(x=>x.id===id);
+    document.getElementById('mr-titulo').textContent='Editar Conta a Receber';
+    document.getElementById('mr-id').value=r.id;
+    document.getElementById('mr-cliente').value=r.clienteId||'';
+    document.getElementById('mr-desc').value=r.desc||'';
+    document.getElementById('mr-valor').value=r.valor||'';
+    document.getElementById('mr-venc').value=r.vencimento||'';
+    document.getElementById('mr-ret-perc').value=r.retencaoPerc||0;
+    document.getElementById('mr-status').value=r.status||'pendente';
+    document.getElementById('mr-data-rec').value=r.dataRec||'';
+    document.getElementById('mr-obs').value=r.obs||'';
+    document.getElementById('mr-competencia').value=r.competencia||'';
+    calcularLiquidoReceber();
+  } else {
+    document.getElementById('mr-titulo').textContent='Nova Conta a Receber';
+    document.getElementById('mr-id').value='';
+    ['mr-desc','mr-obs','mr-data-rec'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('mr-cliente').value='';
+    document.getElementById('mr-valor').value='';
+    document.getElementById('mr-ret-perc').value=0;
+    document.getElementById('mr-status').value='pendente';
+    const hoje=new Date();
+    document.getElementById('mr-competencia').value=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
+    document.getElementById('mr-venc').value=hoje.toISOString().slice(0,10);
+    document.getElementById('mr-liquido').value='R$ 0,00';
+  }
+  document.getElementById('modal-receber').classList.remove('hidden');
+}
+
+function salvarReceber(){
+  const id=document.getElementById('mr-id').value;
+  const cliId=document.getElementById('mr-cliente').value;
+  const cli=ERP.clientes.find(c=>c.id===cliId);
+  const obj={id:id||gid(),clienteId:cliId,clienteNome:cli?.nome||'',
+    desc:document.getElementById('mr-desc').value.trim(),
+    valor:Number(document.getElementById('mr-valor').value||0),
+    vencimento:document.getElementById('mr-venc').value,
+    retencaoPerc:Number(document.getElementById('mr-ret-perc').value||0),
+    status:document.getElementById('mr-status').value,
+    dataRec:document.getElementById('mr-data-rec').value,
+    obs:document.getElementById('mr-obs').value.trim(),
+    competencia:document.getElementById('mr-competencia').value};
+  if(id){const i=ERP.receber.findIndex(x=>x.id===id);ERP.receber[i]=obj;}else ERP.receber.push(obj);
+  salvarERP();fecharModal('modal-receber');renderReceber();renderDash();
+}
+
+function renderReceber(){
+  const tb=document.getElementById('tb-receber');
+  const mes=getMesSel();
+  const lista=ERP.receber.filter(r=>r.competencia===mes||r.vencimento?.slice(0,7)===mes);
+  if(!lista.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Nenhuma conta a receber.</td></tr>';return;}
+  tb.innerHTML=lista.map(r=>{
+    const liq=r.valor-(r.valor*r.retencaoPerc/100);
+    return `<tr>
+      <td>${r.desc||'—'}</td>
+      <td>${r.clienteNome||'—'}</td>
+      <td>${r.vencimento?new Date(r.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
+      <td><strong style="color:var(--green)">${fmt(r.valor)}</strong></td>
+      <td>${r.retencaoPerc>0?`<span class="badge b-yellow">${r.retencaoPerc}%</span>`:'—'}</td>
+      <td>${fmt(liq)}</td>
+      <td><span class="badge ${r.status==='recebido'?'b-green':r.status==='atraso'?'b-red':'b-yellow'}">${r.status}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="abrirModalReceber('${r.id}')">✏️</button>
+        ${r.status!=='recebido'?`<button class="btn btn-green btn-sm" onclick="darBaixaReceber('${r.id}')">✓ Baixar</button>`:''}
+        <button class="btn btn-danger btn-sm" onclick="excluirReceber('${r.id}')">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function darBaixaReceber(id){
+  const r=ERP.receber.find(x=>x.id===id);if(!r)return;
+  r.status='recebido';r.dataRec=new Date().toISOString().slice(0,10);
+  salvarERP();renderReceber();renderDash();
+}
+function excluirReceber(id){if(!confirm('Excluir?'))return;ERP.receber=ERP.receber.filter(x=>x.id!==id);salvarERP();renderReceber();}
+
+// ================================================================
+// CONTAS A PAGAR
+// ================================================================
+function abrirModalPagar(id){
+  popularSelectsCats();popularSelectsCC();
+  if(id){
+    const p=ERP.pagar.find(x=>x.id===id);
+    document.getElementById('mp-titulo').textContent='Editar Conta a Pagar';
+    document.getElementById('mp-id').value=p.id;
+    document.getElementById('mp-desc').value=p.desc||'';
+    document.getElementById('mp-cat').value=p.catId||'';
+    document.getElementById('mp-valor').value=p.valor||'';
+    document.getElementById('mp-venc').value=p.vencimento||'';
+    document.getElementById('mp-cc').value=p.ccId||'';
+    document.getElementById('mp-recorr').value=p.recorrencia||'unica';
+    document.getElementById('mp-status').value=p.status||'pendente';
+    document.getElementById('mp-data-pag').value=p.dataPag||'';
+    document.getElementById('mp-obs').value=p.obs||'';
+  } else {
+    document.getElementById('mp-titulo').textContent='Nova Conta a Pagar';
+    document.getElementById('mp-id').value='';
+    ['mp-desc','mp-obs','mp-data-pag'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('mp-valor').value='';
+    document.getElementById('mp-venc').value=new Date().toISOString().slice(0,10);
+    document.getElementById('mp-cat').value='';
+    document.getElementById('mp-cc').value='';
+    document.getElementById('mp-recorr').value='unica';
+    document.getElementById('mp-status').value='pendente';
+  }
+  document.getElementById('modal-pagar').classList.remove('hidden');
+}
+
+function salvarPagar(){
+  const id=document.getElementById('mp-id').value;
+  const catId=document.getElementById('mp-cat').value;
+  const cat=ERP.categorias.find(c=>c.id===catId);
+  const ccId=document.getElementById('mp-cc').value;
+  const obj={id:id||gid(),desc:document.getElementById('mp-desc').value.trim(),
+    catId,catNome:cat?.nome||'',valor:Number(document.getElementById('mp-valor').value||0),
+    vencimento:document.getElementById('mp-venc').value,ccId,
+    recorrencia:document.getElementById('mp-recorr').value,
+    status:document.getElementById('mp-status').value,
+    dataPag:document.getElementById('mp-data-pag').value,
+    obs:document.getElementById('mp-obs').value.trim()};
+  if(id){const i=ERP.pagar.findIndex(x=>x.id===id);ERP.pagar[i]=obj;}else ERP.pagar.push(obj);
+  salvarERP();fecharModal('modal-pagar');renderPagar();renderDash();
+}
+
+function renderPagar(){
+  const tb=document.getElementById('tb-pagar');
+  const mes=getMesSel();
+  const lista=ERP.pagar.filter(p=>p.vencimento?.slice(0,7)===mes);
+  if(!lista.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Nenhuma conta a pagar.</td></tr>';return;}
+  tb.innerHTML=lista.map(p=>`<tr>
+    <td>${p.desc||'—'}</td>
+    <td>${p.catNome||'—'}</td>
+    <td>${ERP.clientes.find(c=>c.id===p.ccId)?.nome||'ADM'}</td>
+    <td>${p.vencimento?new Date(p.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
+    <td><strong style="color:var(--red)">${fmt(p.valor)}</strong></td>
+    <td><span class="badge ${p.status==='pago'?'b-green':p.status==='atraso'?'b-red':'b-yellow'}">${p.status}</span></td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-ghost btn-sm" onclick="abrirModalPagar('${p.id}')">✏️</button>
+      ${p.status!=='pago'?`<button class="btn btn-green btn-sm" onclick="darBaixaPagar('${p.id}')">✓ Pago</button>`:''}
+      <button class="btn btn-danger btn-sm" onclick="excluirPagar('${p.id}')">🗑️</button>
+    </td>
+  </tr>`).join('');
+}
+
+function darBaixaPagar(id){
+  const p=ERP.pagar.find(x=>x.id===id);if(!p)return;
+  p.status='pago';p.dataPag=new Date().toISOString().slice(0,10);
+  salvarERP();renderPagar();renderDash();
+}
+function excluirPagar(id){if(!confirm('Excluir?'))return;ERP.pagar=ERP.pagar.filter(x=>x.id!==id);salvarERP();renderPagar();}
+
+// ================================================================
+// FOLHA DE PAGAMENTO
+// ================================================================
+function gerarFolha(){
+  const mes=getMesSel();
+  const colabs=ERP.colaboradores.filter(c=>c.ativo!==false);
+  if(!colabs.length){alert('Nenhum colaborador cadastrado.');return;}
+  // Verificar se já existe folha para o mês
+  const jaExiste=ERP.pagar.some(p=>p.competencia===mes&&p.catNome?.includes('Folha'));
+  if(jaExiste&&!confirm('Já existe folha gerada para este mês. Gerar novamente vai duplicar. Continuar?'))return;
+
+  colabs.forEach(col=>{
+    // Salário
+    ERP.pagar.push({id:gid(),desc:`Salário — ${col.nome} (${col.tipo})`,
+      catId:'',catNome:col.tipo==='CLT'?'Folha CLT':'Pagamento RPA',
+      valor:col.salario,vencimento:mes+'-05',ccId:col.ccId||'',
+      recorrencia:'mensal',status:'pendente',competencia:mes});
+    if(col.tipo==='CLT'){
+      // FGTS
+      ERP.pagar.push({id:gid(),desc:`FGTS — ${col.nome}`,catId:'',catNome:'Encargos FGTS',
+        valor:col.fgts,vencimento:mes+'-07',ccId:col.ccId||'',recorrencia:'mensal',status:'pendente',competencia:mes});
+      // INSS
+      ERP.pagar.push({id:gid(),desc:`INSS Emp. — ${col.nome}`,catId:'',catNome:'Encargos INSS',
+        valor:col.inss,vencimento:mes+'-20',ccId:col.ccId||'',recorrencia:'mensal',status:'pendente',competencia:mes});
+    }
+  });
+  salvarERP();renderFolha();renderPagar();alert('✅ Folha gerada! Confira em Contas a Pagar.');
+}
+
+function renderFolha(){
+  const tb=document.getElementById('tb-folha');
+  const mes=getMesSel();
+  const colabs=ERP.colaboradores.filter(c=>c.ativo!==false);
+  if(!colabs.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:14px">Nenhum colaborador.</td></tr>';return;}
+  let totalGeral=0;
+  tb.innerHTML=colabs.map(col=>{
+    const pago=ERP.pagar.some(p=>p.competencia===mes&&p.desc?.includes(col.nome)&&p.status==='pago');
+    totalGeral+=col.custoTotal||col.salario;
+    return `<tr>
+      <td><strong>${col.nome}</strong></td>
+      <td><span class="badge ${col.tipo==='CLT'?'b-blue':'b-orange'}">${col.tipo}</span></td>
+      <td>${col.funcao||'—'}</td>
+      <td>${fmt(col.salario)}</td>
+      <td>${col.tipo==='CLT'?fmt(col.fgts):'—'}</td>
+      <td>${col.tipo==='CLT'?fmt(col.inss):'—'}</td>
+      <td><strong>${fmt(col.custoTotal||col.salario)}</strong></td>
+      <td>${ERP.clientes.find(c=>c.id===col.ccId)?.nome||'ADM'}</td>
+      <td><span class="badge ${pago?'b-green':'b-yellow'}">${pago?'Pago':'Pendente'}</span></td>
+      <td>${col.tipo==='RPA'?`<button class="btn btn-orange btn-sm" onclick="gerarReciboRPA('${col.id}')">🧾 RPA</button>`:'—'}</td>
+    </tr>`;
+  }).join('')+`<tr style="background:var(--brand-light);">
+    <td colspan="6"><strong>TOTAL CUSTO FOLHA</strong></td>
+    <td colspan="4"><strong style="color:var(--red)">${fmt(totalGeral)}</strong></td>
+  </tr>`;
+}
+
+// ================================================================
+// IMPOSTOS
+// ================================================================
+function calcularImpostos(){
+  const mes=getMesSel();
+  const recBruta=totalReceitaBruta(mes);
+  const aliq=Number(ERP.config.aliquota||6)/100;
+  const das=recBruta*aliq;
+  const retencoes=totalRetencoes(mes);
+  const dasFinal=Math.max(0,das-retencoes);
+  const [ano,m]=mes.split('-');
+  const venc=`${ano}-${m}-${String(ERP.config.dasDia||20).padStart(2,'0')}`;
+  const jaExiste=ERP.impostos.find(i=>i.competencia===mes);
+  if(jaExiste){
+    jaExiste.receitaBruta=recBruta;jaExiste.das=das;jaExiste.retencoes=retencoes;jaExiste.dasFinal=dasFinal;
+  } else {
+    ERP.impostos.push({id:gid(),competencia:mes,receitaBruta:recBruta,aliquota:ERP.config.aliquota,
+      das,retencoes,dasFinal,vencimento:venc,status:'pendente'});
+  }
+  salvarERP();renderImpostos();alert(`✅ DAS calculado: ${fmt(dasFinal)} com vencimento ${new Date(venc+'T12:00').toLocaleDateString('pt-BR')}`);
+}
+
+function renderImpostos(){
+  const tb=document.getElementById('tb-impostos');
+  if(!ERP.impostos.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Clique em "Calcular DAS" para gerar.</td></tr>';return;}
+  tb.innerHTML=[...ERP.impostos].reverse().map(i=>`<tr>
+    <td>${MESES[Number(i.competencia?.split('-')[1])-1]||''} ${i.competencia?.split('-')[0]||''}</td>
+    <td>${fmt(i.receitaBruta)}</td>
+    <td>${i.aliquota}%</td>
+    <td>${fmt(i.das)}</td>
+    <td style="color:var(--green)">(${fmt(i.retencoes)})</td>
+    <td><strong style="color:var(--red)">${fmt(i.dasFinal)}</strong></td>
+    <td>${i.vencimento?new Date(i.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
+    <td><span class="badge ${i.status==='pago'?'b-green':'b-yellow'}">${i.status}</span>
+      ${i.status!=='pago'?`<button class="btn btn-green btn-sm" style="margin-left:6px;" onclick="pagarDAS('${i.id}')">✓ Pago</button>`:''}
+    </td>
+  </tr>`).join('');
+}
+
+function pagarDAS(id){
+  const i=ERP.impostos.find(x=>x.id===id);if(!i)return;
+  i.status='pago';i.dataPag=new Date().toISOString().slice(0,10);
+  salvarERP();renderImpostos();
+}
+
+// ================================================================
+// RECIBOS
+// ================================================================
+let tipoReciboAtual='cliente';
+
+function abrirModalRecibo(tipo){
+  tipoReciboAtual=tipo;
+  popularSelectsClientes();
+  document.getElementById('mrec-titulo').textContent=tipo==='cliente'?'Recibo para Cliente':'Recibo para RPA';
+  document.getElementById('mrec-form-cliente').classList.toggle('hidden',tipo!=='cliente');
+  document.getElementById('mrec-form-rpa').classList.toggle('hidden',tipo!=='rpa');
+
+  // Popular RPAs
+  const rpasSel=document.getElementById('mrec-rpa');
+  rpasSel.innerHTML='<option value="">Selecione...</option>'+ERP.colaboradores.filter(c=>c.tipo==='RPA').map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+
+  // Número automático
+  const num=String(ERP.recibos.length+1).padStart(4,'0');
+  document.getElementById(tipo==='cliente'?'mrec-num':'mrec-rpa-num').value=num;
+  const hoje=new Date();
+  const comp=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
+  document.getElementById(tipo==='cliente'?'mrec-comp':'mrec-rpa-comp').value=comp;
+
+  document.getElementById('modal-recibo').classList.remove('hidden');
+}
+
+function gerarReciboCliente(clienteId){
+  abrirModalRecibo('cliente');
+  setTimeout(()=>{
+    document.getElementById('mrec-cliente').value=clienteId;
+    const c=ERP.clientes.find(x=>x.id===clienteId);
+    if(c){
+      document.getElementById('mrec-valor').value=c.valorMensal||'';
+      document.getElementById('mrec-servico').value=c.servico||'Prestação de serviços de limpeza, conservação e zeladoria.';
+    }
+  },100);
+}
+
+function gerarReciboRPA(colabId){
+  abrirModalRecibo('rpa');
+  setTimeout(()=>{
+    document.getElementById('mrec-rpa').value=colabId;
+    const c=ERP.colaboradores.find(x=>x.id===colabId);
+    if(c){
+      document.getElementById('mrec-rpa-valor').value=c.salario||'';
+      document.getElementById('mrec-rpa-servico').value=`Prestação de serviços de ${c.funcao||'limpeza e conservação'} conforme acordado.`;
+    }
+  },100);
+}
+
+function gerarRecibo(){
+  const tipo=tipoReciboAtual;
+  let recibo={};
+  if(tipo==='cliente'){
+    const cliId=document.getElementById('mrec-cliente').value;
+    const cli=ERP.clientes.find(c=>c.id===cliId);
+    recibo={id:gid(),tipo:'cliente',num:document.getElementById('mrec-num').value,
+      clienteId:cliId,clienteNome:cli?.nome||'',clienteCNPJ:cli?.cnpj||'',
+      valor:Number(document.getElementById('mrec-valor').value||0),
+      servico:document.getElementById('mrec-servico').value,
+      competencia:document.getElementById('mrec-comp').value,
+      data:new Date().toISOString().slice(0,10)};
+  } else {
+    const rpaId=document.getElementById('mrec-rpa').value;
+    const rpa=ERP.colaboradores.find(c=>c.id===rpaId);
+    recibo={id:gid(),tipo:'rpa',num:document.getElementById('mrec-rpa-num').value,
+      rpaId,rpaNome:rpa?.nome||'',rpaCPF:rpa?.cpf||'',rpaPix:rpa?.pix||'',
+      valor:Number(document.getElementById('mrec-rpa-valor').value||0),
+      servico:document.getElementById('mrec-rpa-servico').value,
+      competencia:document.getElementById('mrec-rpa-comp').value,
+      data:new Date().toISOString().slice(0,10)};
+  }
+  ERP.recibos.push(recibo);
+  salvarERP();fecharModal('modal-recibo');
+  imprimirRecibo(recibo);
+}
+
+function imprimirRecibo(rec){
+  const cfg=ERP.config;
+  const [ano,m]=rec.competencia.split('-');
+  const compStr=MESES[Number(m)-1]+'/'+ano;
+  const dataStr=new Date(rec.data+'T12:00').toLocaleDateString('pt-BR');
+  let html='';
+  if(rec.tipo==='cliente'){
+    html=`<div class="recibo">
+      <div class="recibo-hdr">
+        <div style="font-size:36px;">🌀</div>
+        <div class="recibo-empresa">
+          <div class="nome">${cfg.nome}</div>
+          <div class="sub">QUALIDADE E EXCELÊNCIA EM SERVIÇOS</div>
+          <div class="sub">CNPJ: ${cfg.cnpj} | ${cfg.tel} | ${cfg.email}</div>
+        </div>
+        <div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:var(--brand)">Nº ${rec.num}</div><div style="font-size:11px;color:var(--text3)">${dataStr}</div></div>
+      </div>
+      <div class="recibo-titulo">RECIBO DE PRESTAÇÃO DE SERVIÇOS</div>
+      <div class="recibo-valor">
+        <div class="val">${fmt(rec.valor)}</div>
+        <div class="extenso">Referente a: ${compStr}</div>
+      </div>
+      <div class="recibo-info"><table>
+        <tr><td>Recebemos de:</td><td><strong>${rec.clienteNome}</strong>${rec.clienteCNPJ?' — CNPJ: '+rec.clienteCNPJ:''}</td></tr>
+        <tr><td>O valor de:</td><td><strong>${fmt(rec.valor)}</strong></td></tr>
+        <tr><td>Referente a:</td><td>${rec.servico}</td></tr>
+        <tr><td>Competência:</td><td>${compStr}</td></tr>
+        <tr><td>Data:</td><td>${dataStr}</td></tr>
+      </table></div>
+      <div class="recibo-assin">
+        <div class="recibo-assin-linha">Assinatura do Prestador<br><span style="font-size:9px;color:var(--text3)">${cfg.nome}<br>CNPJ: ${cfg.cnpj}</span></div>
+        <div class="recibo-assin-linha">Assinatura do Tomador<br><span style="font-size:9px;color:var(--text3)">${rec.clienteNome}${rec.clienteCNPJ?'<br>CNPJ: '+rec.clienteCNPJ:''}</span></div>
+      </div>
+      <div class="recibo-footer">${cfg.nome} | CNPJ: ${cfg.cnpj} | Recibo nº ${rec.num} | ${dataStr}</div>
+    </div>`;
+  } else {
+    html=`<div class="recibo">
+      <div class="recibo-hdr">
+        <div style="font-size:36px;">🌀</div>
+        <div class="recibo-empresa">
+          <div class="nome">${cfg.nome}</div>
+          <div class="sub">QUALIDADE E EXCELÊNCIA EM SERVIÇOS</div>
+          <div class="sub">CNPJ: ${cfg.cnpj} | ${cfg.tel} | ${cfg.email}</div>
+        </div>
+        <div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:var(--orange)">RPA Nº ${rec.num}</div><div style="font-size:11px;color:var(--text3)">${dataStr}</div></div>
+      </div>
+      <div class="recibo-titulo" style="color:var(--orange);background:#fff3e0;">RECIBO DE PAGAMENTO AUTÔNOMO (RPA)</div>
+      <div class="recibo-valor" style="background:var(--orange-light);border-color:#f5c06a;">
+        <div class="val" style="color:var(--orange)">${fmt(rec.valor)}</div>
+        <div class="extenso">Referente a: ${compStr}</div>
+      </div>
+      <div class="recibo-info"><table>
+        <tr><td>Prestador de Serviço:</td><td><strong>${rec.rpaNome}</strong></td></tr>
+        <tr><td>CPF:</td><td>${rec.rpaCPF||'—'}</td></tr>
+        <tr><td>PIX:</td><td>${rec.rpaPix||'—'}</td></tr>
+        <tr><td>Tomador dos Serviços:</td><td><strong>${cfg.nome}</strong> — CNPJ: ${cfg.cnpj}</td></tr>
+        <tr><td>Valor:</td><td><strong>${fmt(rec.valor)}</strong></td></tr>
+        <tr><td>Descrição dos Serviços:</td><td>${rec.servico}</td></tr>
+        <tr><td>Competência:</td><td>${compStr}</td></tr>
+        <tr><td>Data:</td><td>${dataStr}</td></tr>
+      </table></div>
+      <p style="font-size:10px;color:var(--text2);margin:12px 0;padding:8px;background:var(--yellow-light);border-radius:6px;">
+        Declaro, para os devidos fins, que recebi a importância acima descrita pelos serviços prestados, e que estou ciente da minha responsabilidade como profissional autônomo quanto ao recolhimento de impostos incidentes sobre esta remuneração.
+      </p>
+      <div class="recibo-assin">
+        <div class="recibo-assin-linha">Assinatura do Prestador (Autônomo)<br><span style="font-size:9px;color:var(--text3)">${rec.rpaNome}<br>CPF: ${rec.rpaCPF||'—'}</span></div>
+        <div class="recibo-assin-linha">Assinatura do Responsável<br><span style="font-size:9px;color:var(--text3)">${cfg.nome}<br>CNPJ: ${cfg.cnpj}</span></div>
+      </div>
+      <div class="recibo-footer">${cfg.nome} | CNPJ: ${cfg.cnpj} | RPA nº ${rec.num} | ${dataStr}</div>
+    </div>`;
+  }
+  document.getElementById('print-area').innerHTML=html;
+  window.print();
+  setTimeout(()=>document.getElementById('print-area').innerHTML='',1000);
+}
+
+function renderRecibos(){
+  const el=document.getElementById('recibos-lista');
+  if(!ERP.recibos.length){el.innerHTML='<div class="card" style="text-align:center;color:var(--text3);padding:30px;">Nenhum recibo emitido. Use os botões acima para gerar.</div>';return;}
+  el.innerHTML='<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>Tipo</th><th>Para</th><th>Competência</th><th>Valor</th><th>Data</th><th>Ações</th></tr></thead><tbody>'+
+  [...ERP.recibos].reverse().map(r=>`<tr>
+    <td>${r.num}</td>
+    <td><span class="badge ${r.tipo==='cliente'?'b-blue':'b-orange'}">${r.tipo==='cliente'?'Cliente':'RPA'}</span></td>
+    <td>${r.clienteNome||r.rpaNome||'—'}</td>
+    <td>${MESES[Number(r.competencia?.split('-')[1])-1]||''} ${r.competencia?.split('-')[0]||''}</td>
+    <td><strong>${fmt(r.valor)}</strong></td>
+    <td>${r.data?new Date(r.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
+    <td><button class="btn btn-ghost btn-sm" onclick="imprimirRecibo(ERP.recibos.find(x=>x.id==='${r.id}'))">🖨️ Reimprimir</button></td>
+  </tr>`).join('')+'</tbody></table></div></div>';
+}
+
+// ================================================================
+// CONFIG
+// ================================================================
+function carregarConfig(){
+  document.getElementById('cfg-nome').value=ERP.config.nome||'';
+  document.getElementById('cfg-cnpj').value=ERP.config.cnpj||'';
+  document.getElementById('cfg-end').value=ERP.config.end||'';
+  document.getElementById('cfg-tel').value=ERP.config.tel||'';
+  document.getElementById('cfg-email').value=ERP.config.email||'';
+  document.getElementById('cfg-regime').value=ERP.config.regime||'simples';
+  document.getElementById('cfg-aliquota').value=ERP.config.aliquota||6;
+  document.getElementById('cfg-das-dia').value=ERP.config.dasDia||20;
+}
+
+function salvarConfig(){
+  ERP.config={...ERP.config,
+    nome:document.getElementById('cfg-nome').value.trim(),
+    cnpj:document.getElementById('cfg-cnpj').value.trim(),
+    end:document.getElementById('cfg-end').value.trim(),
+    tel:document.getElementById('cfg-tel').value.trim(),
+    email:document.getElementById('cfg-email').value.trim(),
+    regime:document.getElementById('cfg-regime').value,
+    aliquota:Number(document.getElementById('cfg-aliquota').value||6),
+    dasDia:Number(document.getElementById('cfg-das-dia').value||20)};
+  salvarERP();alert('✅ Configurações salvas!');
+}
+
+// MODAIS
+function fecharModal(id){const el=document.getElementById(id);if(el){el.classList.add('hidden');el.style.display='none';}}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.add('hidden');}));
+
+function imprimirPagina(){window.print();}
+
+// INIT
+carregarERP();
+popularFiltroMes();
+popularSelectsClientes();
+popularSelectsCats();
+
+// Categorias padrão
+if(!ERP.categorias.length){
+  ERP.categorias=[
+    {id:'cat1',nome:'Folha de Pagamento CLT',tipo:'pessoal',cc:'cliente'},
+    {id:'cat2',nome:'FGTS',tipo:'imposto',cc:'cliente'},
+    {id:'cat3',nome:'INSS Empresa',tipo:'imposto',cc:'cliente'},
+    {id:'cat4',nome:'DAS / Simples Nacional',tipo:'imposto',cc:'adm'},
+    {id:'cat5',nome:'Aluguel',tipo:'fixo',cc:'adm'},
+    {id:'cat6',nome:'Contador',tipo:'fixo',cc:'adm'},
+    {id:'cat7',nome:'Telefone / Internet',tipo:'fixo',cc:'adm'},
+    {id:'cat8',nome:'Transporte',tipo:'variavel',cc:'adm'},
+    {id:'cat9',nome:'Material de Limpeza',tipo:'variavel',cc:'cliente'},
+    {id:'cat10',nome:'EPI / Uniformes',tipo:'variavel',cc:'cliente'},
+    {id:'cat11',nome:'Pagamento RPA',tipo:'pessoal',cc:'cliente'},
+    {id:'cat12',nome:'Marketing',tipo:'variavel',cc:'adm'},
+  ];
+  salvarERP();
+}
+
+renderDash();
+</script>
+</body>
+</html>

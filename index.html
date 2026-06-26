@@ -158,6 +158,7 @@ tr:hover td{background:#fafbff;}
     <div style="display:flex;gap:8px;align-items:center;">
       <select id="filtro-mes" style="padding:6px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:12px;" onchange="atualizarTudo()"></select>
       <button class="btn btn-primary btn-sm" id="btn-novo" style="display:none;" onclick="novoItem()">+ Novo</button>
+      <button class="btn btn-green btn-sm" id="btn-sync-erp-top" onclick="sincronizarERP()" title="Sincronizar com Sheets">☁️</button>
       <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️</button>
     </div>
   </div>
@@ -394,6 +395,17 @@ tr:hover td{background:#fafbff;}
 
     <!-- CONFIG -->
     <div class="page" id="page-config">
+      <div class="card" style="border:2px solid var(--brand);background:var(--brand-light);">
+        <div class="card-title">☁️ Conexão com Google Sheets (ERP na Nuvem)</div>
+        <div class="info-box blue">Cole a URL do seu Google Apps Script para sincronizar o ERP na nuvem e acessar de qualquer lugar, inclusive pelo celular.</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="text" id="erp-url-input" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1;padding:9px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;">
+          <button class="btn btn-primary" onclick="salvarURLErp(document.getElementById('erp-url-input').value)">Salvar</button>
+          <button class="btn btn-green" id="btn-sync-erp" onclick="sincronizarERP()">☁️ Sincronizar</button>
+        </div>
+        <div id="sync-status" style="font-size:12px;color:var(--text3);">Não sincronizado ainda.</div>
+      </div>
+
       <div class="card">
         <div class="card-title">Dados da Empresa</div>
         <div class="fr"><div class="fg"><label>Razão Social</label><input id="cfg-nome" value="MJL Servicos e Solucoes"></div><div class="fg"><label>CNPJ</label><input id="cfg-cnpj" value="46.636.732/0001-73"></div></div>
@@ -1148,6 +1160,85 @@ function salvarConfig(){ERP.config={...ERP.config,nome:document.getElementById('
 function novoItem(){}
 document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m){m.classList.add('hidden');m.style.display='none';}}));
 
+
+// ================================================================
+// SINCRONIZAÇÃO COM GOOGLE SHEETS
+// ================================================================
+var ERP_SCRIPT_URL = '';
+
+function salvarURLErp(url){
+  ERP_SCRIPT_URL=url.trim();
+  localStorage.setItem('mjl_erp_script_url', ERP_SCRIPT_URL);
+  alert('✅ URL salva! Clique em Sincronizar.');
+}
+
+function carregarURLErp(){
+  ERP_SCRIPT_URL=localStorage.getItem('mjl_erp_script_url')||'';
+  const el=document.getElementById('erp-url-input');
+  if(el)el.value=ERP_SCRIPT_URL;
+}
+
+function sincronizarERP(){
+  const url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
+  if(!url){alert('Configure a URL do Sheets em Configurações primeiro.');return;}
+  if(!navigator.onLine){alert('Sem conexão com a internet.');return;}
+  
+  const btn=document.getElementById('btn-sync-erp');
+  if(btn){btn.textContent='⏳ Sincronizando...';btn.disabled=true;}
+  
+  // 1. Primeiro envia os dados locais para o Sheets
+  const payload={acao:'syncAll',dados:{
+    clientes:ERP.clientes,colaboradores:ERP.colaboradores,
+    servicos:ERP.servicos,categorias:ERP.categorias,
+    receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
+    vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
+    recibos:ERP.recibos,config:ERP.config
+  }};
+  
+  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .catch(()=>{})
+    .finally(()=>{
+      // 2. Depois busca os dados do Sheets (getAll)
+      fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
+        .then(r=>r.json())
+        .then(function(data){
+          if(data){
+            // Merge inteligente — prioriza dados mais recentes
+            if(data.clientes?.length) ERP.clientes=data.clientes;
+            if(data.colaboradores?.length) ERP.colaboradores=data.colaboradores;
+            if(data.servicos?.length) ERP.servicos=data.servicos;
+            if(data.categorias?.length) ERP.categorias=data.categorias;
+            if(data.receber?.length) ERP.receber=data.receber;
+            if(data.pagar?.length) ERP.pagar=data.pagar;
+            if(data.impostos?.length) ERP.impostos=data.impostos;
+            if(data.vendas?.length) ERP.vendas=data.vendas;
+            if(data.contas?.length) ERP.contas=data.contas;
+            if(data.movimentos?.length) ERP.movimentos=data.movimentos;
+            if(data.recibos?.length) ERP.recibos=data.recibos;
+            if(data.config && Object.keys(data.config).length) ERP.config=data.config;
+            salvarERP();
+            atualizarTudo();
+            const st=document.getElementById('sync-status');
+            if(st){st.textContent='✅ Sincronizado '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
+          }
+        })
+        .catch(function(){
+          const st=document.getElementById('sync-status');
+          if(st){st.textContent='⚠️ Dados enviados mas não recebidos (CORS)';st.style.color='var(--yellow)';}
+        })
+        .finally(function(){
+          if(btn){btn.textContent='☁️ Sincronizar';btn.disabled=false;}
+        });
+    });
+}
+
+// Auto-sync a cada 5 minutos quando online
+setInterval(function(){
+  const url=localStorage.getItem('mjl_erp_script_url');
+  if(url&&navigator.onLine)sincronizarERP();
+},5*60*1000);
+// ================================================================
+
 // INIT
 carregarERP();
 popularMeses('filtro-mes');popularMeses('cc-mes');
@@ -1160,7 +1251,7 @@ if(!ERP.categorias.length){ERP.categorias=[
   {id:'i1',nome:'DAS/Simples Nacional',tipo:'imposto',sub:''},{id:'i2',nome:'ISS',tipo:'imposto',sub:''},{id:'i3',nome:'IRRF',tipo:'imposto',sub:''},
   {id:'pv1',nome:'Provisão RH (Férias/13°)',tipo:'provisao',sub:''},{id:'pv2',nome:'Provisão Rescisão',tipo:'provisao',sub:''},{id:'pv3',nome:'Reserva Emergência',tipo:'provisao',sub:''}
 ];}
-salvarERP();resetFluxo();renderDash();
+salvarERP();carregarURLErp();resetFluxo();renderDash();
 
 </script>
 </body>

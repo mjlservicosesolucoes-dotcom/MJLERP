@@ -130,6 +130,16 @@ tr:hover td{background:var(--brand-light);}
 .fc-linha{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-bottom:1px solid var(--bg);}
 .fc-linha:last-child{border-bottom:none;}
 
+
+/* ALERTAS VENCIMENTO */
+.tr-atraso td{background:#fff0ef!important;border-left:3px solid var(--red);}
+.tr-vence-hoje td{background:#fef9e7!important;border-left:3px solid var(--yellow);}
+.tr-vence-breve td{background:#fff8f0!important;border-left:3px solid var(--orange);}
+.alerta-venc{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;}
+.alerta-venc.atraso{background:var(--red-light);color:var(--red);}
+.alerta-venc.hoje{background:var(--yellow-light);color:var(--yellow);}
+.alerta-venc.breve{background:var(--orange-light);color:var(--orange);}
+
 /* PRINT */
 @media print{
   #sidebar,#topbar,.btn,button,.modal-overlay{display:none!important;}
@@ -301,8 +311,8 @@ tr:hover td{background:var(--brand-light);}
         <strong style="font-size:15px;color:var(--brand)">Contas a Receber</strong>
         <button class="btn btn-primary btn-sm" onclick="abrirModalReceber()">+ Lançar</button>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-        <input type="text" id="rec-busca" placeholder="🔍 Buscar por cliente ou descrição..." style="flex:1;min-width:200px;padding:8px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" oninput="renderReceber()">
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="rec-busca" placeholder="🔍 Buscar por cliente ou descrição..." style="flex:1;min-width:180px;padding:8px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" oninput="renderReceber()">
         <select id="rec-filtro-status" style="padding:8px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderReceber()">
           <option value="">Todos os status</option>
           <option value="pendente">Pendente</option>
@@ -312,6 +322,14 @@ tr:hover td{background:var(--brand-light);}
         <select id="rec-filtro-cli" style="padding:8px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderReceber()">
           <option value="">Todos os clientes</option>
         </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+        <label style="font-size:12px;font-weight:700;color:var(--text2);">Vencimento de:</label>
+        <input type="date" id="rec-de" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderReceber()">
+        <label style="font-size:12px;font-weight:700;color:var(--text2);">até:</label>
+        <input type="date" id="rec-ate" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderReceber()">
+        <button class="btn btn-ghost btn-sm" onclick="limparFiltrosReceber()">✕ Limpar</button>
+        <div id="rec-resumo" style="font-size:12px;color:var(--text2);margin-left:auto;"></div>
       </div>
       <div class="card" style="padding:0;"><div class="table-wrap"><table>
         <thead><tr><th>Descrição</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Retenção</th><th>Valor Líquido</th><th>Status</th><th>Ações</th></tr></thead>
@@ -325,8 +343,8 @@ tr:hover td{background:var(--brand-light);}
         <strong style="font-size:15px;color:var(--brand)">Contas a Pagar</strong>
         <button class="btn btn-primary btn-sm" onclick="abrirModalPagar()">+ Lançar</button>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-        <input type="text" id="pag-busca" placeholder="🔍 Buscar por descrição ou categoria..." style="flex:1;min-width:200px;padding:8px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" oninput="renderPagar()">
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="pag-busca" placeholder="🔍 Buscar por descrição ou categoria..." style="flex:1;min-width:180px;padding:8px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" oninput="renderPagar()">
         <select id="pag-filtro-status" style="padding:8px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderPagar()">
           <option value="">Todos os status</option>
           <option value="pendente">Pendente</option>
@@ -339,6 +357,14 @@ tr:hover td{background:var(--brand-light);}
         <select id="pag-filtro-cc" style="padding:8px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderPagar()">
           <option value="">Todos os centros</option>
         </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+        <label style="font-size:12px;font-weight:700;color:var(--text2);">Vencimento de:</label>
+        <input type="date" id="pag-de" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderPagar()">
+        <label style="font-size:12px;font-weight:700;color:var(--text2);">até:</label>
+        <input type="date" id="pag-ate" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderPagar()">
+        <button class="btn btn-ghost btn-sm" onclick="limparFiltrosPagar()">✕ Limpar</button>
+        <div id="pag-resumo" style="font-size:12px;color:var(--text2);margin-left:auto;"></div>
       </div>
       <div class="card" style="padding:0;"><div class="table-wrap"><table>
         <thead><tr><th>Descrição</th><th>Categoria</th><th>Centro de Custo</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
@@ -836,10 +862,13 @@ function renderDash(){
               ...ERP.pagar.filter(p=>p.status==='pendente'&&new Date(p.vencimento)<=em7).map(p=>({...p,tipo:'pagar'}))];
   prox.sort((a,b)=>new Date(a.vencimento)-new Date(b.vencimento));
   document.getElementById('dash-vencimentos').innerHTML=prox.length?
-    prox.map(i=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-      <div><span class="badge ${i.tipo==='receber'?'b-green':'b-red'}" style="margin-right:8px;">${i.tipo==='receber'?'↓ Receber':'↑ Pagar'}</span>${i.desc||i.clienteNome||''}</div>
-      <div style="text-align:right;"><div style="font-weight:700;color:${i.tipo==='receber'?'var(--green)':'var(--red)'};">${fmt(i.valor)}</div><div style="font-size:11px;color:var(--text3);">${new Date(i.vencimento+'T12:00').toLocaleDateString('pt-BR')}</div></div>
-    </div>`).join(''):'<p style="color:var(--text3);font-size:13px;">Nenhum vencimento nos próximos 7 dias.</p>';
+    prox.map(i=>{
+      const alerta=statusVencimento(i.vencimento, i.status||'pendente');
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;${alerta.classe==='tr-atraso'?'background:#fff0ef;border-radius:6px;padding:8px;margin-bottom:4px;':alerta.classe==='tr-vence-hoje'?'background:#fef9e7;border-radius:6px;padding:8px;margin-bottom:4px;':''}">
+        <div><span class="badge ${i.tipo==='receber'?'b-green':'b-red'}" style="margin-right:6px;">${i.tipo==='receber'?'↓':'↑'}</span>${i.desc||i.clienteNome||''} ${alerta.badge}</div>
+        <div style="text-align:right;"><div style="font-weight:700;color:${i.tipo==='receber'?'var(--green)':'var(--red)'};">${fmt(i.valor)}</div><div style="font-size:11px;color:var(--text3);">${new Date(i.vencimento+'T12:00').toLocaleDateString('pt-BR')}</div></div>
+      </div>`;
+    }).join(''):'<p style="color:var(--text3);font-size:13px;">Nenhum vencimento nos próximos 7 dias.</p>';
 }
 
 // ================================================================
@@ -1701,6 +1730,42 @@ document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click
 function imprimirPagina(){window.print();}
 
 
+
+// ================================================================
+// HELPERS DE VENCIMENTO E ALERTAS
+// ================================================================
+function statusVencimento(dataStr, status){
+  if(status==='pago'||status==='recebido') return {classe:'',badge:''};
+  if(!dataStr) return {classe:'',badge:''};
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const venc = new Date(dataStr+'T12:00:00');
+  const diff = Math.floor((venc-hoje)/(1000*60*60*24));
+  if(diff < 0) return {classe:'tr-atraso', badge:'<span class="alerta-venc atraso">⚠️ '+Math.abs(diff)+'d atraso</span>'};
+  if(diff === 0) return {classe:'tr-vence-hoje', badge:'<span class="alerta-venc hoje">🔔 Vence hoje!</span>'};
+  if(diff <= 5) return {classe:'tr-vence-breve', badge:'<span class="alerta-venc breve">⏰ Vence em '+diff+'d</span>'};
+  return {classe:'',badge:''};
+}
+
+function limparFiltrosReceber(){
+  document.getElementById('rec-busca').value='';
+  document.getElementById('rec-filtro-status').value='';
+  document.getElementById('rec-filtro-cli').value='';
+  document.getElementById('rec-de').value='';
+  document.getElementById('rec-ate').value='';
+  renderReceber();
+}
+
+function limparFiltrosPagar(){
+  document.getElementById('pag-busca').value='';
+  document.getElementById('pag-filtro-status').value='';
+  document.getElementById('pag-filtro-cat').value='';
+  document.getElementById('pag-filtro-cc').value='';
+  document.getElementById('pag-de').value='';
+  document.getElementById('pag-ate').value='';
+  renderPagar();
+}
+// ================================================================
+
 // ================================================================
 // MELHORIAS: FILTROS, CENTRO DE CUSTO, IMPOSTOS
 // ================================================================
@@ -1930,31 +1995,59 @@ function excluirImposto(id){
   salvarERP();renderImpostos();
 }
 
-// Override renderReceber com filtros
+// Override renderReceber com filtros + alertas de vencimento
 const _renderReceberOrig = renderReceber;
 window.renderReceber = function(){
   // Popular filtro de clientes
   const filtCli=document.getElementById('rec-filtro-cli');
-  if(filtCli&&filtCli.options.length<=1){
+  if(filtCli){
+    const val=filtCli.value;
     filtCli.innerHTML='<option value="">Todos os clientes</option>'+
       ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+    filtCli.value=val;
   }
   const tb=document.getElementById('tb-receber');
   const mes=getMesSel();
   const busca=(document.getElementById('rec-busca')?.value||'').toLowerCase();
   const filtStatus=document.getElementById('rec-filtro-status')?.value||'';
   const filtCliVal=document.getElementById('rec-filtro-cli')?.value||'';
-  let lista=ERP.receber.filter(r=>r.competencia===mes||r.vencimento?.slice(0,7)===mes);
+  const de=document.getElementById('rec-de')?.value||'';
+  const ate=document.getElementById('rec-ate')?.value||'';
+  
+  // Se tem filtro de data, usar ele. Senão usar mês selecionado
+  let lista;
+  if(de||ate){
+    lista=ERP.receber.filter(r=>{
+      const d=r.vencimento||'';
+      return (!de||d>=de)&&(!ate||d<=ate);
+    });
+  } else {
+    lista=ERP.receber.filter(r=>r.competencia===mes||r.vencimento?.slice(0,7)===mes);
+  }
   if(busca)lista=lista.filter(r=>(r.clienteNome||'').toLowerCase().includes(busca)||(r.desc||'').toLowerCase().includes(busca));
   if(filtStatus)lista=lista.filter(r=>r.status===filtStatus);
   if(filtCliVal)lista=lista.filter(r=>r.clienteId===filtCliVal);
-  if(!lista.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Nenhuma conta a receber.</td></tr>';return;}
+  
+  // Ordenar: atrasados primeiro, depois por vencimento
+  lista.sort((a,b)=>{
+    const da=new Date(a.vencimento||'9999'), db=new Date(b.vencimento||'9999');
+    return da-db;
+  });
+  
+  // Resumo
+  const totalPend=lista.filter(r=>r.status!=='recebido').reduce((s,r)=>s+Number(r.valor||0),0);
+  const totalRec=lista.filter(r=>r.status==='recebido').reduce((s,r)=>s+Number(r.valor||0),0);
+  const resumo=document.getElementById('rec-resumo');
+  if(resumo) resumo.innerHTML=`<span style="color:var(--green);font-weight:700;">Recebido: ${fmt(totalRec)}</span> &nbsp;|&nbsp; <span style="color:var(--yellow);font-weight:700;">Pendente: ${fmt(totalPend)}</span>`;
+  
+  if(!lista.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Nenhuma conta a receber no período.</td></tr>';return;}
   tb.innerHTML=lista.map(r=>{
     const liq=r.valor-(r.valor*(r.retencaoPerc||0)/100);
-    return `<tr>
+    const alerta=statusVencimento(r.vencimento, r.status);
+    return `<tr class="${alerta.classe}">
       <td>${r.desc||'—'}</td>
       <td>${r.clienteNome||'—'}</td>
-      <td>${r.vencimento?new Date(r.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
+      <td>${r.vencimento?new Date(r.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'} ${alerta.badge}</td>
       <td><strong style="color:var(--green)">${fmt(r.valor)}</strong></td>
       <td>${(r.retencaoPerc||0)>0?`<span class="badge b-yellow">${r.retencaoPerc}%</span>`:'—'}</td>
       <td>${fmt(liq)}</td>
@@ -1968,13 +2061,15 @@ window.renderReceber = function(){
   }).join('');
 };
 
-// Override renderPagar com filtros
+// Override renderPagar com filtros de data + alertas de vencimento
 window.renderPagar = function(){
-  // Popular filtro de categorias
+  // Popular filtros
   const filtCat=document.getElementById('pag-filtro-cat');
-  if(filtCat&&filtCat.options.length<=1){
+  if(filtCat){
+    const val=filtCat.value;
     filtCat.innerHTML='<option value="">Todas as categorias</option>'+
       ERP.categorias.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+    filtCat.value=val;
   }
   popularSelectsCCAll();
   const tb=document.getElementById('tb-pagar');
@@ -1983,26 +2078,50 @@ window.renderPagar = function(){
   const filtStatus=document.getElementById('pag-filtro-status')?.value||'';
   const filtCatVal=document.getElementById('pag-filtro-cat')?.value||'';
   const filtCCVal=document.getElementById('pag-filtro-cc')?.value||'';
-  let lista=ERP.pagar.filter(p=>p.vencimento?.slice(0,7)===mes);
+  const de=document.getElementById('pag-de')?.value||'';
+  const ate=document.getElementById('pag-ate')?.value||'';
+  
+  let lista;
+  if(de||ate){
+    lista=ERP.pagar.filter(p=>{
+      const d=p.vencimento||'';
+      return (!de||d>=de)&&(!ate||d<=ate);
+    });
+  } else {
+    lista=ERP.pagar.filter(p=>p.vencimento?.slice(0,7)===mes);
+  }
   if(busca)lista=lista.filter(p=>(p.desc||'').toLowerCase().includes(busca)||(p.catNome||'').toLowerCase().includes(busca));
   if(filtStatus)lista=lista.filter(p=>p.status===filtStatus);
   if(filtCatVal)lista=lista.filter(p=>p.catId===filtCatVal);
   if(filtCCVal)lista=lista.filter(p=>p.ccId===filtCCVal);
-  if(!lista.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Nenhuma conta a pagar.</td></tr>';return;}
+  
+  // Ordenar: atrasados primeiro
+  lista.sort((a,b)=>new Date(a.vencimento||'9999')-new Date(b.vencimento||'9999'));
+  
+  // Resumo
+  const totalPend=lista.filter(p=>p.status!=='pago').reduce((s,p)=>s+Number(p.valor||0),0);
+  const totalPago=lista.filter(p=>p.status==='pago').reduce((s,p)=>s+Number(p.valor||0),0);
+  const resumo=document.getElementById('pag-resumo');
+  if(resumo) resumo.innerHTML=`<span style="color:var(--green);font-weight:700;">Pago: ${fmt(totalPago)}</span> &nbsp;|&nbsp; <span style="color:var(--red);font-weight:700;">Pendente: ${fmt(totalPend)}</span>`;
+  
+  if(!lista.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Nenhuma conta a pagar no período.</td></tr>';return;}
   const todos=[...ERP.clientes,...(ERP.centrosExtras||[])];
-  tb.innerHTML=lista.map(p=>`<tr>
-    <td>${p.desc||'—'}</td>
-    <td>${p.catNome||'—'}</td>
-    <td>${todos.find(c=>c.id===p.ccId)?.nome||'ADM'}</td>
-    <td>${p.vencimento?new Date(p.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
-    <td><strong style="color:var(--red)">${fmt(p.valor)}</strong></td>
-    <td><span class="badge ${p.status==='pago'?'b-green':p.status==='atraso'?'b-red':'b-yellow'}">${p.status}</span></td>
-    <td style="white-space:nowrap;">
-      <button class="btn btn-ghost btn-sm" onclick="abrirModalPagar('${p.id}')">✏️</button>
-      ${p.status!=='pago'?`<button class="btn btn-green btn-sm" onclick="darBaixaPagar('${p.id}')">✓</button>`:''}
-      <button class="btn btn-danger btn-sm" onclick="excluirPagar('${p.id}')">🗑️</button>
-    </td>
-  </tr>`).join('');
+  tb.innerHTML=lista.map(p=>{
+    const alerta=statusVencimento(p.vencimento, p.status);
+    return `<tr class="${alerta.classe}">
+      <td>${p.desc||'—'}</td>
+      <td>${p.catNome||'—'}</td>
+      <td>${todos.find(c=>c.id===p.ccId)?.nome||'ADM'}</td>
+      <td>${p.vencimento?new Date(p.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'} ${alerta.badge}</td>
+      <td><strong style="color:var(--red)">${fmt(p.valor)}</strong></td>
+      <td><span class="badge ${p.status==='pago'?'b-green':p.status==='atraso'?'b-red':'b-yellow'}">${p.status}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="abrirModalPagar('${p.id}')">✏️</button>
+        ${p.status!=='pago'?`<button class="btn btn-green btn-sm" onclick="darBaixaPagar('${p.id}')">✓</button>`:''}
+        <button class="btn btn-danger btn-sm" onclick="excluirPagar('${p.id}')">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
 };
 
 // Override renderCC para incluir centros extras e impostos

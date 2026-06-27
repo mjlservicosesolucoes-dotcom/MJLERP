@@ -1237,8 +1237,8 @@ function sincronizarERP(){
           }
         })
         .catch(function(){
-          const st=document.getElementById('sync-status');
-          if(st){st.textContent='⚠️ Dados enviados mas não recebidos (CORS)';st.style.color='var(--yellow)';}
+          // Tentar buscar mesmo assim
+          carregarDoSheets();
         })
         .finally(function(){
           if(btn){btn.textContent='☁️ Sincronizar';btn.disabled=false;}
@@ -1256,6 +1256,34 @@ setInterval(function(){
 // INIT
 carregarERP();
 popularMeses('filtro-mes');popularMeses('cc-mes');
+
+// Buscar dados do Sheets ao abrir
+function carregarDoSheets(){
+  var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
+  if(!url||!navigator.onLine) return;
+  fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(!data) return;
+      var atualizado=false;
+      // Merge: só atualiza se o Sheets tiver dados
+      ['clientes','colaboradores','servicos','categorias','receber','pagar',
+       'impostos','vendas','contas','movimentos','recibos'].forEach(function(k){
+        if(data[k]&&data[k].length){ERP[k]=data[k];atualizado=true;}
+      });
+      if(data.config&&Object.keys(data.config).length){ERP.config=data.config;atualizado=true;}
+      if(atualizado){
+        localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
+        atualizarTudo();
+        var st=document.getElementById('sync-status');
+        if(st){st.textContent='✅ Dados carregados do Sheets em '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
+      }
+    })
+    .catch(function(){});
+}
+// Carregar do Sheets 2 segundos após abrir (dá tempo do app inicializar)
+setTimeout(carregarDoSheets, 2000);
+
 if(!ERP.contas.find(c=>c.id==='prov-rh'))ERP.contas.push({id:'prov-rh',nome:'Provisão RH',tipo:'provisao',banco:'',saldo:0});
 if(!ERP.categorias.length){ERP.categorias=[
   {id:'r1',nome:'Serviços Fixos Mensais',tipo:'receita',sub:''},{id:'r2',nome:'Cobertura de Férias',tipo:'receita',sub:''},{id:'r3',nome:'Serviços Avulsos',tipo:'receita',sub:''},{id:'r4',nome:'Feriados Trabalhados',tipo:'receita',sub:''},{id:'r5',nome:'Aporte Próprio',tipo:'aporte',sub:''},{id:'r6',nome:'Resgate de Provisão',tipo:'resgate',sub:''},{id:'r7',nome:'Rendimento Investimento',tipo:'investimento',sub:''},

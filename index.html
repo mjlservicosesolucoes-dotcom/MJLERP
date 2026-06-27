@@ -650,18 +650,30 @@ const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agos
 let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:6,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[]};
 function salvarERP(){
   localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
-  // Enviar para Sheets automaticamente (no-cors, não espera resposta)
+  enviarParaSheets();
+}
+
+function temDados(){
+  // Só envia se tiver pelo menos algum dado real cadastrado
+  return ERP.clientes.length>0||ERP.colaboradores.length>0||
+         ERP.receber.length>0||ERP.pagar.length>0||
+         ERP.impostos.length>0||ERP.vendas.length>0||
+         ERP.servicos.length>0||ERP.movimentos.length>0;
+}
+
+function enviarParaSheets(){
   var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
-  if(url&&navigator.onLine){
-    var payload={acao:'syncAll',dados:{
-      clientes:ERP.clientes,colaboradores:ERP.colaboradores,
-      servicos:ERP.servicos,categorias:ERP.categorias,
-      receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
-      vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
-      recibos:ERP.recibos,config:ERP.config
-    }};
-    fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(function(){});
-  }
+  if(!url||!navigator.onLine) return;
+  // Só envia se tiver dados reais — evita apagar o Sheets com dados vazios
+  if(!temDados()) return;
+  var payload={acao:'syncAll',dados:{
+    clientes:ERP.clientes,colaboradores:ERP.colaboradores,
+    servicos:ERP.servicos,categorias:ERP.categorias,
+    receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
+    vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
+    recibos:ERP.recibos,config:ERP.config
+  }};
+  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(function(){});
 }
 function carregarERP(){const r=localStorage.getItem('mjl_erp_v2');if(r)ERP=JSON.parse(r);}
 function gid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
@@ -1200,49 +1212,40 @@ function sincronizarERP(){
   const btn=document.getElementById('btn-sync-erp');
   if(btn){btn.textContent='⏳ Sincronizando...';btn.disabled=true;}
   
-  // 1. Primeiro envia os dados locais para o Sheets
-  const payload={acao:'syncAll',dados:{
-    clientes:ERP.clientes,colaboradores:ERP.colaboradores,
-    servicos:ERP.servicos,categorias:ERP.categorias,
-    receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
-    vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
-    recibos:ERP.recibos,config:ERP.config
-  }};
-  
-  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-    .catch(()=>{})
-    .finally(()=>{
-      // 2. Depois busca os dados do Sheets (getAll)
-      fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
-        .then(r=>r.json())
-        .then(function(data){
-          if(data){
-            // Merge inteligente — prioriza dados mais recentes
-            if(data.clientes?.length) ERP.clientes=data.clientes;
-            if(data.colaboradores?.length) ERP.colaboradores=data.colaboradores;
-            if(data.servicos?.length) ERP.servicos=data.servicos;
-            if(data.categorias?.length) ERP.categorias=data.categorias;
-            if(data.receber?.length) ERP.receber=data.receber;
-            if(data.pagar?.length) ERP.pagar=data.pagar;
-            if(data.impostos?.length) ERP.impostos=data.impostos;
-            if(data.vendas?.length) ERP.vendas=data.vendas;
-            if(data.contas?.length) ERP.contas=data.contas;
-            if(data.movimentos?.length) ERP.movimentos=data.movimentos;
-            if(data.recibos?.length) ERP.recibos=data.recibos;
-            if(data.config && Object.keys(data.config).length) ERP.config=data.config;
-            salvarERP();
-            atualizarTudo();
-            const st=document.getElementById('sync-status');
-            if(st){st.textContent='✅ Sincronizado '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
-          }
-        })
-        .catch(function(){
-          // Tentar buscar mesmo assim
-          carregarDoSheets();
-        })
-        .finally(function(){
-          if(btn){btn.textContent='☁️ Sincronizar';btn.disabled=false;}
-        });
+  // Sincronizar = PRIMEIRO busca do Sheets, DEPOIS envia se tiver dados locais
+  fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data){
+        var atualizado=false;
+        if(data.clientes&&data.clientes.length){ERP.clientes=data.clientes;atualizado=true;}
+        if(data.colaboradores&&data.colaboradores.length){ERP.colaboradores=data.colaboradores;atualizado=true;}
+        if(data.servicos&&data.servicos.length){ERP.servicos=data.servicos;atualizado=true;}
+        if(data.categorias&&data.categorias.length){ERP.categorias=data.categorias;atualizado=true;}
+        if(data.receber&&data.receber.length){ERP.receber=data.receber;atualizado=true;}
+        if(data.pagar&&data.pagar.length){ERP.pagar=data.pagar;atualizado=true;}
+        if(data.impostos&&data.impostos.length){ERP.impostos=data.impostos;atualizado=true;}
+        if(data.vendas&&data.vendas.length){ERP.vendas=data.vendas;atualizado=true;}
+        if(data.contas&&data.contas.length){ERP.contas=data.contas;atualizado=true;}
+        if(data.movimentos&&data.movimentos.length){ERP.movimentos=data.movimentos;atualizado=true;}
+        if(data.recibos&&data.recibos.length){ERP.recibos=data.recibos;atualizado=true;}
+        if(data.config&&Object.keys(data.config).length){ERP.config=data.config;atualizado=true;}
+        if(atualizado){
+          localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
+          atualizarTudo();
+          const st=document.getElementById('sync-status');
+          if(st){st.textContent='✅ Sincronizado '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
+        }
+      }
+      // Só envia para Sheets se tiver dados locais
+      if(temDados()) enviarParaSheets();
+    })
+    .catch(function(){
+      // Se não conseguiu buscar, pelo menos envia o que tem
+      if(temDados()) enviarParaSheets();
+    })
+    .finally(function(){
+      if(btn){btn.textContent='☁️ Sincronizar';btn.disabled=false;}
     });
 }
 
@@ -1281,8 +1284,14 @@ function carregarDoSheets(){
     })
     .catch(function(){});
 }
-// Carregar do Sheets 2 segundos após abrir (dá tempo do app inicializar)
-setTimeout(carregarDoSheets, 2000);
+// Ao abrir: PRIMEIRO busca do Sheets, depois o app está pronto para uso
+// Nunca envia dados vazios para o Sheets
+setTimeout(function(){
+  var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
+  if(url&&navigator.onLine){
+    carregarDoSheets();
+  }
+}, 1500);
 
 if(!ERP.contas.find(c=>c.id==='prov-rh'))ERP.contas.push({id:'prov-rh',nome:'Provisão RH',tipo:'provisao',banco:'',saldo:0});
 if(!ERP.categorias.length){ERP.categorias=[

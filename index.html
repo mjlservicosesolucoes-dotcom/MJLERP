@@ -648,7 +648,21 @@ tr:hover td{background:#fafbff;}
 <script>
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:6,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[]};
-function salvarERP(){localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));}
+function salvarERP(){
+  localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
+  // Enviar para Sheets automaticamente (no-cors, não espera resposta)
+  var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
+  if(url&&navigator.onLine){
+    var payload={acao:'syncAll',dados:{
+      clientes:ERP.clientes,colaboradores:ERP.colaboradores,
+      servicos:ERP.servicos,categorias:ERP.categorias,
+      receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
+      vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
+      recibos:ERP.recibos,config:ERP.config
+    }};
+    fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(function(){});
+  }
+}
 function carregarERP(){const r=localStorage.getItem('mjl_erp_v2');if(r)ERP=JSON.parse(r);}
 function gid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
 function fmt(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}

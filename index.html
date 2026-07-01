@@ -751,8 +751,11 @@ function renderDash(){
   const das=recBruta*Number(ERP.config.aliq||6)/100;
   const resultado=(recBruta-ret-das)-custos;
   const marg=recBruta>0?resultado/recBruta*100:0;
-  const pend=ERP.receber.filter(r=>r.st==='pendente').reduce((s,r)=>s+Number(r.val||0),0);
-  const atras=ERP.receber.filter(r=>r.st==='atraso').reduce((s,r)=>s+Number(r.val||0),0);
+  // Antes somava TODOS os meses pendentes (histórico inteiro). Agora reflete
+  // só o mês selecionado no filtro do topo, igual à Receita Bruta acima —
+  // assim um contrato encerrado ou pendências antigas não inflam o card.
+  const pend=recMes.filter(r=>r.st==='pendente').reduce((s,r)=>s+Number(r.val||0),0);
+  const atras=recMes.filter(r=>r.st==='atraso').reduce((s,r)=>s+Number(r.val||0),0);
   const provSaldo=ERP.contas.filter(c=>c.tipo==='provisao').reduce((s,c)=>s+Number(c.saldo||0),0);
   const hoje=new Date();hoje.setHours(0,0,0,0);const em7=new Date(hoje);em7.setDate(em7.getDate()+7);
   const venc7=[...ERP.receber,...ERP.pagar].filter(x=>x.st!=='pago'&&x.st!=='recebido'&&x.venc&&new Date(x.venc+'T12:00')<=em7);

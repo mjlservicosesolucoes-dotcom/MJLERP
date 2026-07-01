@@ -528,7 +528,7 @@ tr:hover td{background:#fafbff;}
     <div class="fg"><label>Descrição</label><input id="mrec-desc"></div>
     <div id="mrec-extras-box" style="display:none;background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <label style="font-size:11px;font-weight:700;color:var(--text2);">SERVIÇOS EXTRAS (além do contrato fixo)</label>
+        <label style="font-size:11px;font-weight:700;color:var(--text2);">EXTRAS DESTE MÊS (dissídio, diárias, serviços avulsos...)</label>
         <button class="btn btn-ghost btn-sm" onclick="addExtraRec()">+ Extra</button>
       </div>
       <div id="mrec-extras-lista"></div>
@@ -648,9 +648,14 @@ tr:hover td{background:#fafbff;}
 <script>
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:6,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[]};
+let _syncDebounceTimer=null;
 function salvarERP(){
   localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
-  enviarParaSheets();
+  // Debounce: se o usuário salvar vários lançamentos em sequência rápida,
+  // agrupa tudo em um único envio ao Sheets em vez de disparar um POST
+  // por clique (reduz risco de duas sincronizações conflitantes por perto).
+  if(_syncDebounceTimer)clearTimeout(_syncDebounceTimer);
+  _syncDebounceTimer=setTimeout(function(){enviarParaSheets();},1200);
 }
 
 function temDados(){
@@ -673,10 +678,24 @@ function enviarParaSheets(){
     vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
     recibos:ERP.recibos,config:ERP.config
   }};
-  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(function(){});
+  const st=document.getElementById('sync-status');
+  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(){
+      // mode:'no-cors' não deixa ler a resposta, mas se chegou aqui o navegador
+      // não bloqueou o envio.
+      if(st){st.textContent='☁️ Enviado ao Sheets '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
+    })
+    .catch(function(){
+      if(st){st.textContent='⚠️ Falha ao enviar para o Sheets — verifique a conexão ou a URL em Configurações.';st.style.color='var(--red)';}
+    });
 }
 function carregarERP(){const r=localStorage.getItem('mjl_erp_v2');if(r)ERP=JSON.parse(r);}
-function gid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+function gid(){
+  if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();
+  // Fallback com contador para garantir unicidade mesmo em loops rápidos
+  gid._seq=(gid._seq||0)+1;
+  return Date.now().toString(36)+'-'+gid._seq+'-'+Math.random().toString(36).slice(2,7);
+}
 function fmt(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtP(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';}
 function fm(id){const el=document.getElementById(id);if(el){el.classList.add('hidden');el.style.display='none';}}
@@ -869,8 +888,37 @@ let _extrasRec=[];
 function abrirModalReceber(id){
   popSel(['mrec-cli'],'<option value="">Selecione...</option>');
   const h=new Date();
-  if(id){const r=ERP.receber.find(x=>x.id===id);document.getElementById('mrec-id').value=r.id;document.getElementById('mrec-cli').value=r.cliId||'';document.getElementById('mrec-comp').value=r.comp||'';document.getElementById('mrec-desc').value=r.desc||'';document.getElementById('mrec-val').value=r.val||'';document.getElementById('mrec-ret').value=r.retP||0;document.getElementById('mrec-venc').value=r.venc||'';document.getElementById('mrec-st').value=r.st||'pendente';document.getElementById('mrec-drec').value=r.drec||'';document.getElementById('mrec-obs').value=r.obs||'';_extrasRec=[...(r.extras||[])];}
-  else{['mrec-id','mrec-desc','mrec-val','mrec-drec','mrec-obs'].forEach(x=>document.getElementById(x).value='');document.getElementById('mrec-cli').value='';document.getElementById('mrec-comp').value=h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0');document.getElementById('mrec-ret').value=0;document.getElementById('mrec-venc').value='';document.getElementById('mrec-st').value='pendente';_extrasRec=[];}
+  if(id){
+    const r=ERP.receber.find(x=>x.id===id);
+    document.getElementById('mrec-id').value=r.id;
+    document.getElementById('mrec-cli').value=r.cliId||'';
+    document.getElementById('mrec-comp').value=r.comp||'';
+    document.getElementById('mrec-desc').value=r.desc||'';
+    // IMPORTANTE: usar valBase (valor sem os extras), não r.val (que já é o total).
+    // Antes isso pegava r.val direto, o que duplicava os extras ao reabrir e salvar de novo.
+    document.getElementById('mrec-val').value=(r.valBase!=null?r.valBase:r.val)||'';
+    document.getElementById('mrec-ret').value=r.retP||0;
+    document.getElementById('mrec-venc').value=r.venc||'';
+    document.getElementById('mrec-st').value=r.st||'pendente';
+    document.getElementById('mrec-drec').value=r.drec||'';
+    document.getElementById('mrec-obs').value=r.obs||'';
+    _extrasRec=(r.extras||[]).map(e=>({svId:e.svId||'',desc:e.desc||'',val:Number(e.val||0),qty:Number(e.qty||1)}));
+    // Mostra a caixa de extras se o cliente for de contrato fixo, ou se já existirem extras salvos
+    const cliObj=ERP.clientes.find(c=>c.id===r.cliId);
+    const box=document.getElementById('mrec-extras-box');
+    if(box)box.style.display=(cliObj&&cliObj.tipo==='fixo')||_extrasRec.length?'block':'none';
+  }
+  else{
+    ['mrec-id','mrec-desc','mrec-val','mrec-drec','mrec-obs'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('mrec-cli').value='';
+    document.getElementById('mrec-comp').value=h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0');
+    document.getElementById('mrec-ret').value=0;
+    document.getElementById('mrec-venc').value='';
+    document.getElementById('mrec-st').value='pendente';
+    _extrasRec=[];
+    const box=document.getElementById('mrec-extras-box');
+    if(box)box.style.display='none';
+  }
   renderExtrasRec();calcRecLiq();abrirModal('modal-rec');
 }
 function preencherCli(){
@@ -878,21 +926,37 @@ function preencherCli(){
   if(cli){document.getElementById('mrec-val').value=cli.valor||'';document.getElementById('mrec-ret').value=cli.retP||0;document.getElementById('mrec-desc').value=`${cli.svNome||'Servicos'} — ${MESES[new Date().getMonth()]}/${new Date().getFullYear()}`;const h=new Date();document.getElementById('mrec-venc').value=new Date(h.getFullYear(),h.getMonth(),cli.diaVenc||5).toISOString().slice(0,10);document.getElementById('mrec-extras-box').style.display=cli.tipo==='fixo'?'block':'none';calcRecLiq();}
 }
 function renderExtrasRec(){
-  document.getElementById('mrec-extras-lista').innerHTML=_extrasRec.length?_extrasRec.map((e,i)=>`<div class="item-venda"><select style="flex:2;" onchange="selExtraRec(${i},this)"><option value="">Serviço extra...</option>${ERP.servicos.map(sv=>`<option value="${sv.id}" ${sv.id===e.svId?'selected':''}>${sv.nome}</option>`).join('')}</select><input placeholder="Desc." value="${e.desc||''}" style="flex:2;" oninput="_extrasRec[${i}].desc=this.value"><input type="number" value="${e.val||''}" style="width:90px;" placeholder="R$" oninput="_extrasRec[${i}].val=Number(this.value);calcRecLiq()"><button class="btn btn-danger btn-sm" onclick="_extrasRec.splice(${i},1);renderExtrasRec();calcRecLiq()">×</button></div>`).join(''):'<p style="color:var(--text3);font-size:12px;margin:4px 0 6px;">Nenhum extra adicionado.</p>';
+  document.getElementById('mrec-extras-lista').innerHTML=_extrasRec.length?_extrasRec.map((e,i)=>{
+    const qty=Number(e.qty||1);const sub=Number(e.val||0)*qty;
+    return `<div class="item-venda">
+      <select style="flex:2;" onchange="selExtraRec(${i},this)"><option value="">Serviço extra...</option>${ERP.servicos.map(sv=>`<option value="${sv.id}" ${sv.id===e.svId?'selected':''}>${sv.nome}</option>`).join('')}</select>
+      <input placeholder="Desc." value="${e.desc||''}" style="flex:2;" oninput="_extrasRec[${i}].desc=this.value">
+      <input type="number" value="${qty}" min="1" style="width:55px;" title="Qtd (ex: nº de diárias)" oninput="_extrasRec[${i}].qty=Number(this.value)||1;renderExtrasRec()">
+      <input type="number" value="${e.val||''}" style="width:90px;" placeholder="R$ unit." oninput="_extrasRec[${i}].val=Number(this.value);renderExtrasRec()">
+      <span style="font-size:11px;color:var(--text3);min-width:70px;">= ${fmt(sub)}</span>
+      <button class="btn btn-danger btn-sm" onclick="_extrasRec.splice(${i},1);renderExtrasRec()">×</button>
+    </div>`;
+  }).join(''):'<p style="color:var(--text3);font-size:12px;margin:4px 0 6px;">Nenhum extra adicionado a este lançamento ainda.</p>';
   calcRecLiq();
 }
-function selExtraRec(i,sel){const sv=ERP.servicos.find(s=>s.id===sel.value);if(sv){_extrasRec[i].svId=sv.id;_extrasRec[i].desc=sv.nome;_extrasRec[i].val=sv.valor;renderExtrasRec();}}
-function addExtraRec(){_extrasRec.push({svId:'',desc:'',val:0});renderExtrasRec();}
+function selExtraRec(i,sel){const sv=ERP.servicos.find(s=>s.id===sel.value);if(sv){_extrasRec[i].svId=sv.id;_extrasRec[i].desc=sv.nome;_extrasRec[i].val=sv.valor;if(!_extrasRec[i].qty)_extrasRec[i].qty=1;renderExtrasRec();}}
+function addExtraRec(){
+  _extrasRec.push({svId:'',desc:'',val:0,qty:1});
+  renderExtrasRec();
+  // Garante que a caixa fique visível assim que um extra é adicionado, mesmo
+  // que o cliente selecionado não seja tipo "fixo".
+  const box=document.getElementById('mrec-extras-box');if(box)box.style.display='block';
+}
 function calcRecLiq(){
   const base=Number(document.getElementById('mrec-val')?.value||0);
-  const extras=_extrasRec.reduce((s,e)=>s+Number(e.val||0),0);
+  const extras=_extrasRec.reduce((s,e)=>s+Number(e.val||0)*Number(e.qty||1),0);
   const total=base+extras;const ret=Number(document.getElementById('mrec-ret')?.value||0);const liq=total-(total*ret/100);
   const e1=document.getElementById('mrec-extras-val');const e2=document.getElementById('mrec-total');const e3=document.getElementById('mrec-liq');
   if(e1)e1.value=fmt(extras);if(e2)e2.value=fmt(total);if(e3)e3.value=fmt(liq);
 }
 function salvarReceber(){
   const id=document.getElementById('mrec-id').value;const cliId=document.getElementById('mrec-cli').value;const cli=ERP.clientes.find(c=>c.id===cliId);
-  const base=Number(document.getElementById('mrec-val').value||0);const extras=_extrasRec.reduce((s,e)=>s+Number(e.val||0),0);const total=base+extras;
+  const base=Number(document.getElementById('mrec-val').value||0);const extras=_extrasRec.reduce((s,e)=>s+Number(e.val||0)*Number(e.qty||1),0);const total=base+extras;
   const obj={id:id||gid(),cliId,cliNome:cli?.nome||'',comp:document.getElementById('mrec-comp').value,desc:document.getElementById('mrec-desc').value.trim(),val:total,valBase:base,extras:[..._extrasRec],retP:Number(document.getElementById('mrec-ret').value||0),venc:document.getElementById('mrec-venc').value,st:document.getElementById('mrec-st').value,drec:document.getElementById('mrec-drec').value,obs:document.getElementById('mrec-obs').value.trim()};
   if(id){const i=ERP.receber.findIndex(x=>x.id===id);ERP.receber[i]=obj;}else ERP.receber.push(obj);
   salvarERP();fm('modal-rec');renderReceber();renderDash();_extrasRec=[];
@@ -1249,10 +1313,14 @@ function sincronizarERP(){
     });
 }
 
-// Auto-sync a cada 5 minutos quando online
+// Auto-atualização a cada 5 minutos quando online.
+// IMPORTANTE: isso só BUSCA (pull) os dados mais recentes do Sheets para manter
+// abas/dispositivos alinhados — NÃO reenvia (push) automaticamente. Enviar só
+// acontece quando você salva algo ou clica em Sincronizar. Isso evita que uma
+// aba esquecida aberta sobrescreva a planilha com dados desatualizados.
 setInterval(function(){
   const url=localStorage.getItem('mjl_erp_script_url');
-  if(url&&navigator.onLine)sincronizarERP();
+  if(url&&navigator.onLine)carregarDoSheets();
 },5*60*1000);
 // ================================================================
 

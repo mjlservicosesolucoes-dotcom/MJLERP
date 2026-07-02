@@ -566,7 +566,16 @@ tr:hover td{background:#fafbff;}
     <input type="hidden" id="mpag-id">
     <div class="fr"><div class="fg"><label>Descrição *</label><input id="mpag-desc"></div><div class="fg"><label>Categoria</label><select id="mpag-cat"><option value="">Sem categoria</option></select></div></div>
     <div class="fr"><div class="fg"><label>Valor (R$)</label><input type="number" id="mpag-val" step="0.01"></div><div class="fg"><label>Vencimento</label><input type="date" id="mpag-venc"></div></div>
-    <div class="fr"><div class="fg"><label>Centro de Custo</label><select id="mpag-cc"><option value="">ADM Geral</option></select></div><div class="fg"><label>Recorrência</label><select id="mpag-rec"><option value="unica">Única</option><option value="mensal">Mensal</option><option value="anual">Anual</option></select></div></div>
+    <div class="fr"><div class="fg"><label>Recorrência</label><select id="mpag-rec"><option value="unica">Única</option><option value="mensal">Mensal</option><option value="anual">Anual</option></select></div><div class="fg"></div></div>
+    <div style="background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;color:var(--text2);">CENTRO DE CUSTO (RATEIO POR %)</label>
+        <button class="btn btn-ghost btn-sm" onclick="addRateioPag()">+ Cliente</button>
+      </div>
+      <div id="mpag-rateio-lista"></div>
+      <div id="mpag-rateio-total" style="font-size:11px;font-weight:700;margin-top:6px;text-align:right;"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">💡 Deixe em branco (ou sem linhas) pra cair em ADM Geral. Adicione mais de um cliente pra dividir a despesa entre contratos (ex: 50%/50%).</div>
+    </div>
     <div class="fr"><div class="fg"><label>Status</label><select id="mpag-st"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="atraso">Em Atraso</option></select></div><div class="fg"><label>Data Pagamento</label><input type="date" id="mpag-dpag"></div></div>
     <div class="fg"><label>Observações</label><input id="mpag-obs"></div>
     <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1" onclick="salvarPagar()">Salvar</button><button class="btn btn-ghost" onclick="fm('modal-pag')">Cancelar</button></div>
@@ -944,17 +953,36 @@ function _detalheRateioPorCliente(cliId){
   });
   return linhas;
 }
+// Mesmo padrão de rateio, agora para Contas a Pagar — uma despesa pode ser
+// dividida por % entre vários clientes (ex: internet compartilhada entre 2
+// contratos). Lançamentos antigos com só um ccId viram 100% automaticamente.
+function _rateiosDoPagar(p){
+  if(p.rateios&&p.rateios.length)return p.rateios;
+  if(p.ccId)return [{ccId:p.ccId,pct:100}];
+  return [{ccId:'',pct:100}];
+}
+function _detalheRateioPagarPorCliente(cliId,mes){
+  const linhas=[];
+  ERP.pagar.filter(p=>p.venc?.slice(0,7)===mes).forEach(p=>{
+    const valor=Number(p.val||0);
+    _rateiosDoPagar(p).forEach(r=>{
+      if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc,pct:Number(r.pct),val:valor*Number(r.pct)/100});
+    });
+  });
+  return linhas;
+}
 function renderCC(){
   const sel=document.getElementById('cc-mes');const mes=sel?.value||getMes();const el=document.getElementById('cc-body');let html='';
   ERP.clientes.forEach(cli=>{
     const rec=ERP.receber.filter(r=>r.cliId===cli.id&&(r.comp===mes||r.venc?.slice(0,7)===mes));
     const receita=rec.reduce((s,r)=>s+Number(r.val||0),0);
     const ret=rec.reduce((s,r)=>s+Number(r.val||0)*Number(r.retP||0)/100,0);
-    const pag=ERP.pagar.filter(p=>p.ccId===cli.id&&p.venc?.slice(0,7)===mes);
+    const pagLinhas=_detalheRateioPagarPorCliente(cli.id,mes);
+    const totalPag=pagLinhas.reduce((s,p)=>s+p.val,0);
     const imp=ERP.impostos.filter(i=>i.ccId===cli.id&&i.comp===mes&&i.ret!=='sim');
     const rateioLinhas=_detalheRateioPorCliente(cli.id);
     const maoObra=rateioLinhas.reduce((s,r)=>s+r.val,0);
-    const custos=pag.reduce((s,p)=>s+Number(p.val||0),0)+imp.reduce((s,i)=>s+Number(i.val||0),0)+maoObra;
+    const custos=totalPag+imp.reduce((s,i)=>s+Number(i.val||0),0)+maoObra;
     const das=receita*Number(ERP.config.aliq||6)/100;
     const margem=receita-ret-das-custos;const perc=receita>0?margem/receita*100:0;
     html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow);">
@@ -964,17 +992,17 @@ function renderCC(){
         ${ret>0?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) Retenções</span><span>(${fmt(ret)})</span></div>`:''}
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) DAS (${ERP.config.aliq}%)</span><span>(${fmt(das)})</span></div>
         ${rateioLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span>(${fmt(r.val)})</span></div>`).join('')}
-        ${pag.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${p.desc}</span><span>(${fmt(p.val)})</span></div>`).join('')}
+        ${pagLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span>(${fmt(p.val)})</span></div>`).join('')}
         ${imp.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${i.tipo}: ${i.desc}</span><span>(${fmt(i.val)})</span></div>`).join('')}
         <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Margem</span><strong style="color:${margem>=0?'var(--green)':'var(--red)'}">${fmt(margem)} (${fmtP(perc)})</strong></div>
       </div>
     </div>`;
   });
-  const pagAdm=ERP.pagar.filter(p=>!p.ccId&&p.venc?.slice(0,7)===mes);
+  const pagAdmLinhas=_detalheRateioPagarPorCliente('',mes);
   const impAdm=ERP.impostos.filter(i=>!i.ccId&&i.comp===mes&&i.ret!=='sim');
   const rateioAdmLinhas=_detalheRateioPorCliente('');
-  const totAdm=pagAdm.reduce((s,p)=>s+Number(p.val||0),0)+impAdm.reduce((s,i)=>s+Number(i.val||0),0)+rateioAdmLinhas.reduce((s,r)=>s+r.val,0);
-  if(totAdm>0)html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;"><div style="background:#5a6a7a;color:#fff;padding:12px 16px;"><strong>⚙️ ADM Geral</strong></div><div style="padding:12px 16px;">${rateioAdmLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span style="color:var(--red)">${fmt(r.val)}</span></div>`).join('')}${[...pagAdm,...impAdm].map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc||p.tipo||''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Total ADM</span><strong style="color:var(--red)">${fmt(totAdm)}</strong></div></div></div>`;
+  const totAdm=pagAdmLinhas.reduce((s,p)=>s+p.val,0)+impAdm.reduce((s,i)=>s+Number(i.val||0),0)+rateioAdmLinhas.reduce((s,r)=>s+r.val,0);
+  if(totAdm>0)html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;"><div style="background:#5a6a7a;color:#fff;padding:12px 16px;"><strong>⚙️ ADM Geral</strong></div><div style="padding:12px 16px;">${rateioAdmLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span style="color:var(--red)">${fmt(r.val)}</span></div>`).join('')}${pagAdmLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}${impAdm.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc||p.tipo||''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Total ADM</span><strong style="color:var(--red)">${fmt(totAdm)}</strong></div></div></div>`;
   el.innerHTML=html||'<div class="info-box blue">Cadastre clientes para ver o centro de custo.</div>';
 }
 
@@ -1111,15 +1139,56 @@ function renderVendas(){
 function excluirVd(id){if(!confirm('Excluir?'))return;const vinculadas=ERP.receber.filter(x=>x.vendaId===id).map(x=>x.id);ERP.vendas=ERP.vendas.filter(x=>x.id!==id);ERP.receber=ERP.receber.filter(x=>x.vendaId!==id);_marcarExcluido('vendas',id);vinculadas.forEach(rid=>_marcarExcluido('receber',rid));salvarERP();renderVendas();}
 
 // CONTAS A PAGAR
+let _rateiosPag=[];
+function renderRateiosPag(){
+  document.getElementById('mpag-rateio-lista').innerHTML=_rateiosPag.length?_rateiosPag.map((r,i)=>`<div class="item-venda">
+      <select style="flex:2;" onchange="_rateiosPag[${i}].ccId=this.value">
+        <option value="" ${!r.ccId?'selected':''}>ADM Geral (não rateado)</option>
+        ${ERP.clientes.map(c=>`<option value="${c.id}" ${c.id===r.ccId?'selected':''}>${c.nome}</option>`).join('')}
+      </select>
+      <input type="number" value="${r.pct}" min="0" max="100" step="1" style="width:70px;" placeholder="%" oninput="_rateiosPag[${i}].pct=Number(this.value)||0;renderRateiosPag()">
+      <span style="font-size:12px;color:var(--text3);">%</span>
+      <button class="btn btn-danger btn-sm" onclick="_rateiosPag.splice(${i},1);renderRateiosPag()">×</button>
+    </div>`).join(''):'<p style="color:var(--text3);font-size:12px;margin:4px 0 6px;">Nenhum rateio — a despesa fica em ADM Geral por padrão.</p>';
+  const total=_rateiosPag.reduce((s,r)=>s+Number(r.pct||0),0);
+  const el=document.getElementById('mpag-rateio-total');
+  if(_rateiosPag.length){
+    el.textContent=`Total: ${total}%`+(total===100?' ✅':total>100?' — passou de 100%, ajuste':' — falta '+(100-total)+'% pra completar 100%');
+    el.style.color=total===100?'var(--green)':'var(--red)';
+  } else el.textContent='';
+}
+function addRateioPag(){
+  const usado=_rateiosPag.reduce((s,r)=>s+Number(r.pct||0),0);
+  _rateiosPag.push({ccId:'',pct:Math.max(0,100-usado)});
+  renderRateiosPag();
+}
 function abrirModalPagar(id){
-  popCatSel('mpag-cat');popCC(['mpag-cc']);const h=new Date();
-  if(id){const p=ERP.pagar.find(x=>x.id===id);document.getElementById('mpag-id').value=p.id;document.getElementById('mpag-desc').value=p.desc||'';document.getElementById('mpag-cat').value=p.catId||'';document.getElementById('mpag-val').value=p.val||'';document.getElementById('mpag-venc').value=p.venc||'';document.getElementById('mpag-cc').value=p.ccId||'';document.getElementById('mpag-rec').value=p.recorr||'unica';document.getElementById('mpag-st').value=p.st||'pendente';document.getElementById('mpag-dpag').value=p.dpag||'';document.getElementById('mpag-obs').value=p.obs||'';}
-  else{['mpag-id','mpag-desc','mpag-val','mpag-dpag','mpag-obs'].forEach(x=>document.getElementById(x).value='');document.getElementById('mpag-cat').value='';document.getElementById('mpag-cc').value='';document.getElementById('mpag-venc').value=h.toISOString().slice(0,10);document.getElementById('mpag-rec').value='unica';document.getElementById('mpag-st').value='pendente';}
-  abrirModal('modal-pag');
+  popCatSel('mpag-cat');const h=new Date();
+  if(id){
+    const p=ERP.pagar.find(x=>x.id===id);
+    document.getElementById('mpag-id').value=p.id;document.getElementById('mpag-desc').value=p.desc||'';document.getElementById('mpag-cat').value=p.catId||'';document.getElementById('mpag-val').value=p.val||'';document.getElementById('mpag-venc').value=p.venc||'';document.getElementById('mpag-rec').value=p.recorr||'unica';document.getElementById('mpag-st').value=p.st||'pendente';document.getElementById('mpag-dpag').value=p.dpag||'';document.getElementById('mpag-obs').value=p.obs||'';
+    // Compatibilidade: lançamentos antigos só tinham um ccId único — vira
+    // automaticamente um rateio de 100% pra esse mesmo cliente.
+    if(p.rateios&&p.rateios.length)_rateiosPag=p.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
+    else if(p.ccId)_rateiosPag=[{ccId:p.ccId,pct:100}];
+    else _rateiosPag=[];
+  }
+  else{
+    ['mpag-id','mpag-desc','mpag-val','mpag-dpag','mpag-obs'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('mpag-cat').value='';document.getElementById('mpag-venc').value=h.toISOString().slice(0,10);document.getElementById('mpag-rec').value='unica';document.getElementById('mpag-st').value='pendente';
+    _rateiosPag=[];
+  }
+  renderRateiosPag();abrirModal('modal-pag');
 }
 function salvarPagar(){
+  const total=_rateiosPag.reduce((s,r)=>s+Number(r.pct||0),0);
+  if(_rateiosPag.length&&total!==100){
+    if(!confirm(`O rateio está somando ${total}% (não 100%). Isso vai deixar o Centro de Custo com um cálculo parcial. Salvar mesmo assim?`))return;
+  }
   const id=document.getElementById('mpag-id').value;const catId=document.getElementById('mpag-cat').value;const cat=ERP.categorias.find(c=>c.id===catId);
-  const obj={id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,ccId:document.getElementById('mpag-cc').value,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
+  const rateios=_rateiosPag.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
+  const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
+  const obj={id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,ccId:principal?principal.ccId:'',rateios,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
   if(id){const i=ERP.pagar.findIndex(x=>x.id===id);ERP.pagar[i]=obj;}else ERP.pagar.push(obj);
   salvarERP();fm('modal-pag');renderPagar();renderDash();
 }
@@ -1133,7 +1202,18 @@ function renderPagar(){
   const tP=lista.filter(p=>p.st!=='pago').reduce((s,p)=>s+Number(p.val||0),0);const tPg=lista.filter(p=>p.st==='pago').reduce((s,p)=>s+Number(p.val||0),0);
   const res=document.getElementById('pag-res');if(res)res.innerHTML=`<span style="color:var(--green);font-weight:700">Pago: ${fmt(tPg)}</span> | <span style="color:var(--red);font-weight:700">Pendente: ${fmt(tP)}</span>`;
   if(!lista.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Nenhum lançamento.</td></tr>';return;}
-  tb.innerHTML=lista.map(p=>{const a=vencStatus(p.venc,p.st);const ccNome=ERP.clientes.find(c=>c.id===p.ccId)?.nome||'ADM';return`<tr class="${a.cls}"><td>${p.desc||'—'}</td><td>${p.catNome||'—'}</td><td>${ccNome}</td><td>${p.venc?new Date(p.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><strong style="color:var(--red)">${fmt(p.val)}</strong></td><td><span class="badge ${p.st==='pago'?'b-green':p.st==='atraso'?'b-red':'b-yellow'}">${p.st||''}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalPagar('${p.id}')">✏️</button>${p.st!=='pago'?`<button class="btn btn-green btn-sm" onclick="baixarPag('${p.id}')">✓</button>`:''}<button class="btn btn-danger btn-sm" onclick="excluirPag('${p.id}')">🗑️</button></td></tr>`;}).join('');
+  tb.innerHTML=lista.map(p=>{
+    const a=vencStatus(p.venc,p.st);
+    const rateios=(p.rateios&&p.rateios.length)?p.rateios:(p.ccId?[{ccId:p.ccId,pct:100}]:[]);
+    let ccCell;
+    if(rateios.length>1){
+      const detalhe=rateios.map(r=>`${ERP.clientes.find(x=>x.id===r.ccId)?.nome||'ADM Geral'}: ${r.pct}%`).join(' • ');
+      ccCell=`<span class="badge b-purple" title="${detalhe}">🔀 ${rateios.length} contratos</span>`;
+    } else {
+      ccCell=rateios.length?(ERP.clientes.find(x=>x.id===rateios[0].ccId)?.nome||'ADM'):'ADM';
+    }
+    return`<tr class="${a.cls}"><td>${p.desc||'—'}</td><td>${p.catNome||'—'}</td><td>${ccCell}</td><td>${p.venc?new Date(p.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><strong style="color:var(--red)">${fmt(p.val)}</strong></td><td><span class="badge ${p.st==='pago'?'b-green':p.st==='atraso'?'b-red':'b-yellow'}">${p.st||''}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalPagar('${p.id}')">✏️</button>${p.st!=='pago'?`<button class="btn btn-green btn-sm" onclick="baixarPag('${p.id}')">✓</button>`:''}<button class="btn btn-danger btn-sm" onclick="excluirPag('${p.id}')">🗑️</button></td></tr>`;
+  }).join('');
 }
 function baixarPag(id){const p=ERP.pagar.find(x=>x.id===id);if(p){p.st='pago';p.dpag=new Date().toISOString().slice(0,10);salvarERP();renderPagar();renderDash();}}
 function excluirPag(id){if(!confirm('Excluir?'))return;ERP.pagar=ERP.pagar.filter(x=>x.id!==id);_marcarExcluido('pagar',id);salvarERP();renderPagar();}

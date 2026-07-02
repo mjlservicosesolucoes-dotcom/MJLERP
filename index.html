@@ -651,44 +651,16 @@ tr:hover td{background:#fafbff;}
 <script>
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:6,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[]};
+const CATS_SYNC=['clientes','colaboradores','servicos','categorias','receber','pagar','impostos','vendas','contas','movimentos','recibos'];
 let _syncDebounceTimer=null;
-// Verdadeira causa da perda de dados mais recente: a busca inicial (pull) ao
-// abrir a página só dispara em 1500ms, mas o envio (push) depois de salvar
-// disparava em apenas 1200ms — ou seja, se você cadastrasse algo rápido logo
-// ao abrir, o envio podia disparar ANTES da busca inicial terminar. Nesse
-// instante a aba só tinha o que você acabou de digitar na memória (nada do
-// que já existia no Sheets) e mandava isso por cima, apagando o resto.
-// Agora nenhum envio acontece antes da primeira busca confirmar os dados.
-let _pullInicialOk=false;
-let _esperaEnvioDesde=null;
 function salvarERP(){
   localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
-  // Debounce: se o usuário salvar vários lançamentos em sequência rápida,
-  // agrupa tudo em um único envio ao Sheets em vez de disparar um POST
-  // por clique (reduz risco de duas sincronizações conflitantes por perto).
+  // Debounce: agrupa varios salvamentos rapidos num unico ciclo de sync.
   if(_syncDebounceTimer)clearTimeout(_syncDebounceTimer);
-  _syncDebounceTimer=setTimeout(_tentarEnviarERP,1200);
-}
-function _tentarEnviarERP(){
-  const url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
-  if(url&&navigator.onLine&&!_pullInicialOk){
-    if(!_esperaEnvioDesde)_esperaEnvioDesde=Date.now();
-    if(Date.now()-_esperaEnvioDesde<8000){
-      const st=document.getElementById('sync-status');
-      if(st){st.textContent='⏳ Confirmando dados atuais do Sheets antes de enviar (evita sobrescrever)...';st.style.color='var(--yellow)';}
-      _syncDebounceTimer=setTimeout(_tentarEnviarERP,600);
-      return;
-    }
-    // Esperou 8s e a busca inicial não respondeu (rede lenta/instável).
-    // Segue com o envio pra não perder o que foi digitado, mas avisa.
-    const st=document.getElementById('sync-status');
-    if(st){st.textContent='⚠️ Não deu pra confirmar o Sheets a tempo — enviando mesmo assim. Confira os dados depois de sincronizar.';st.style.color='var(--red)';}
-  }
-  enviarParaSheets();
+  _syncDebounceTimer=setTimeout(function(){enviarParaSheets();},1200);
 }
 
 function temDados(){
-  // Só envia se tiver pelo menos algum dado real cadastrado
   return ERP.clientes.length>0||ERP.colaboradores.length>0||
          ERP.receber.length>0||ERP.pagar.length>0||
          ERP.impostos.length>0||ERP.vendas.length>0||
@@ -696,67 +668,85 @@ function temDados(){
 }
 
 // ================================================================
-// GUARDA DE SEGURANÇA CONTRA SOBRESCRITA COM DADOS DESATUALIZADOS
+// SINCRONIZACAO POR MESCLAGEM (nao e mais "substituir", e "juntar")
 // ================================================================
-// Guarda quantos registros existiam na ÚLTIMA vez que esta aba confirmou
-// estar sincronizada com o Sheets (depois de um pull bem-sucedido). Se, na
-// hora de enviar, os dados locais tiverem MENOS registros do que essa
-// referência, é sinal de que essa aba pode estar desatualizada (ou alguém
-// excluiu algo de propósito) — nesse caso, pedimos confirmação explícita
-// antes de sobrescrever o Sheets, em vez de mandar por cima silenciosamente.
-let _ultimoPull=null;
-function _snapshotCounts(obj){
-  return {
-    clientes:(obj.clientes||[]).length,
-    colaboradores:(obj.colaboradores||[]).length,
-    receber:(obj.receber||[]).length,
-    pagar:(obj.pagar||[]).length,
-    impostos:(obj.impostos||[]).length,
-    vendas:(obj.vendas||[]).length,
-    servicos:(obj.servicos||[]).length,
-    movimentos:(obj.movimentos||[]).length
-  };
+// MOTIVO DA MUDANCA: mesmo com debounce e espera da busca inicial, uma aba
+// em segundo plano (outra guia, outro dispositivo) podia ficar com uma
+// copia desatualizada na memoria por horas -- o navegador pausa os timers
+// de abas em segundo plano, entao ela nunca recebia as novidades. Quando
+// essa aba era usada de novo e salvava qualquer coisa, ela reenviava sua
+// copia velha por cima da nova, apagando tudo que nao conhecia. Isso
+// acontecia mesmo esperando bastante tempo, porque o problema nunca foi
+// velocidade -- foi a aba nunca ter buscado a versao atual antes de enviar.
+//
+// A partir de agora, TODO envio ao Sheets segue este ciclo, sem excecao:
+//   1) busca a versao atual do Sheets agora mesmo (nao usa cache antigo)
+//   2) mescla: comeca do que esta no Sheets, remove so o que foi excluido
+//      de proposito (marcado com "tombstone"), e adiciona/atualiza com o
+//      que esta na tela agora
+//   3) so DEPOIS envia o resultado mesclado
+// Um registro so desaparece do Sheets se alguem realmente clicou em excluir
+// -- nunca mais por uma aba simplesmente nao conhecer aquele registro.
+
+function _carregarExcluidos(){
+  try{const r=localStorage.getItem('mjl_erp_excluidos');return r?JSON.parse(r):{};}catch(e){return {};}
 }
-function _quedaSuspeita(){
-  if(!_ultimoPull)return null; // ainda não temos referência confiável — não bloqueia
-  const atual=_snapshotCounts(ERP);const problemas=[];
-  Object.keys(_ultimoPull).forEach(function(k){
-    if(_ultimoPull[k]>0&&atual[k]<_ultimoPull[k]){problemas.push('• '+k+': tinha '+_ultimoPull[k]+', agora '+atual[k]);}
+function _marcarExcluido(cat,id){
+  if(!id)return;
+  const ex=_carregarExcluidos();
+  if(!ex[cat])ex[cat]={};
+  ex[cat][id]=Date.now();
+  const limite=Date.now()-30*24*60*60*1000; // esquece exclusoes com mais de 30 dias
+  Object.keys(ex).forEach(function(c){Object.keys(ex[c]).forEach(function(k){if(ex[c][k]<limite)delete ex[c][k];});});
+  localStorage.setItem('mjl_erp_excluidos',JSON.stringify(ex));
+}
+function _mesclarComServidor(serverData){
+  const excluidos=_carregarExcluidos();
+  const resultado={};
+  CATS_SYNC.forEach(function(cat){
+    const map=new Map();
+    ((serverData&&serverData[cat])||[]).forEach(function(item){
+      if(item&&item.id&&!(excluidos[cat]&&excluidos[cat][item.id]))map.set(item.id,item);
+    });
+    (ERP[cat]||[]).forEach(function(item){
+      if(item&&item.id&&!(excluidos[cat]&&excluidos[cat][item.id]))map.set(item.id,item);
+    });
+    resultado[cat]=Array.from(map.values());
   });
-  return problemas.length?problemas:null;
+  resultado.config=(ERP.config&&Object.keys(ERP.config).length)?ERP.config:((serverData&&serverData.config)||ERP.config);
+  return resultado;
 }
 // ================================================================
 
 function enviarParaSheets(){
   var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
   if(!url||!navigator.onLine) return;
-  // Só envia se tiver dados reais — evita apagar o Sheets com dados vazios
   if(!temDados()) return;
   const st=document.getElementById('sync-status');
-  const problemas=_quedaSuspeita();
-  if(problemas){
-    const ok=confirm('⚠️ ATENÇÃO: esta aba tem MENOS registros do que a última sincronização confirmada com o Sheets:\n\n'+problemas.join('\n')+'\n\nSe você excluiu isso de propósito agora mesmo, clique OK para enviar mesmo assim.\n\nSe não tem certeza — ou se essa aba ficou aberta por muito tempo — clique Cancelar e clique em ☁️ Sincronizar primeiro para buscar os dados mais recentes antes de enviar. Enviar por engano pode apagar dados de outros clientes/lançamentos no Sheets.');
-    if(!ok){
-      if(st){st.textContent='⚠️ Envio bloqueado por segurança (dados locais menores que o Sheets). Clique em ☁️ Sincronizar antes de continuar.';st.style.color='var(--red)';}
-      return;
-    }
-  }
-  var payload={acao:'syncAll',dados:{
-    clientes:ERP.clientes,colaboradores:ERP.colaboradores,
-    servicos:ERP.servicos,categorias:ERP.categorias,
-    receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
-    vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
-    recibos:ERP.recibos,config:ERP.config
-  }};
-  fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-    .then(function(){
-      // mode:'no-cors' não deixa ler a resposta, mas se chegou aqui o navegador
-      // não bloqueou o envio.
-      _ultimoPull=_snapshotCounts(ERP);
-      if(st){st.textContent='☁️ Enviado ao Sheets '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
-    })
-    .catch(function(){
-      if(st){st.textContent='⚠️ Falha ao enviar para o Sheets — verifique a conexão ou a URL em Configurações.';st.style.color='var(--red)';}
+  if(st){st.textContent='\u2601\ufe0f Confirmando dados atuais do Sheets antes de enviar...';st.style.color='var(--text3)';}
+  fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
+    .then(function(r){return r.json();})
+    .catch(function(){return null;})
+    .then(function(serverData){
+      const mesclado=_mesclarComServidor(serverData||{});
+      CATS_SYNC.forEach(function(cat){ERP[cat]=mesclado[cat];});
+      ERP.config=mesclado.config;
+      localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
+      if(document.querySelector('.page.active'))atualizarTudo();
+      var payload={acao:'syncAll',dados:{
+        clientes:ERP.clientes,colaboradores:ERP.colaboradores,
+        servicos:ERP.servicos,categorias:ERP.categorias,
+        receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
+        vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
+        recibos:ERP.recibos,config:ERP.config
+      }};
+      return fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+        .then(function(){
+          if(st){st.textContent='\u2601\ufe0f Enviado ao Sheets '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
+        })
+        .catch(function(){
+          if(st){st.textContent='\u26a0\ufe0f Falha ao enviar para o Sheets -- verifique a conexao ou a URL em Configuracoes.';st.style.color='var(--red)';}
+        });
     });
 }
 function carregarERP(){const r=localStorage.getItem('mjl_erp_v2');if(r)ERP=JSON.parse(r);}
@@ -1051,7 +1041,7 @@ function renderReceber(){
 }
 function editarRec(id){const r=ERP.receber.find(x=>x.id===id);_extrasRec=[...(r.extras||[])];abrirModalReceber(id);}
 function baixarRec(id){const r=ERP.receber.find(x=>x.id===id);if(r){r.st='recebido';r.drec=new Date().toISOString().slice(0,10);salvarERP();renderReceber();renderDash();}}
-function excluirRec(id){if(!confirm('Excluir?'))return;ERP.receber=ERP.receber.filter(x=>x.id!==id);salvarERP();renderReceber();}
+function excluirRec(id){if(!confirm('Excluir?'))return;ERP.receber=ERP.receber.filter(x=>x.id!==id);_marcarExcluido('receber',id);salvarERP();renderReceber();}
 
 // VENDAS
 let _itensVd=[];
@@ -1086,7 +1076,7 @@ function renderVendas(){
   if(!lista.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Nenhuma venda.</td></tr>';return;}
   tb.innerHTML=lista.map(v=>{const a=vencStatus(v.venc,v.st);return`<tr class="${a.cls}"><td>${v.data?new Date(v.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td>${v.cliNome||'—'}</td><td style="font-size:11px;">${v.itens?.map(it=>it.desc).join(', ')||'—'}</td><td><strong style="color:var(--green)">${fmt(v.val)}</strong></td><td>${v.venc?new Date(v.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><span class="badge ${v.st==='recebido'?'b-green':'b-yellow'}">${v.st||''}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalVenda('${v.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirVd('${v.id}')">🗑️</button></td></tr>`;}).join('');
 }
-function excluirVd(id){if(!confirm('Excluir?'))return;ERP.vendas=ERP.vendas.filter(x=>x.id!==id);ERP.receber=ERP.receber.filter(x=>x.vendaId!==id);salvarERP();renderVendas();}
+function excluirVd(id){if(!confirm('Excluir?'))return;const vinculadas=ERP.receber.filter(x=>x.vendaId===id).map(x=>x.id);ERP.vendas=ERP.vendas.filter(x=>x.id!==id);ERP.receber=ERP.receber.filter(x=>x.vendaId!==id);_marcarExcluido('vendas',id);vinculadas.forEach(rid=>_marcarExcluido('receber',rid));salvarERP();renderVendas();}
 
 // CONTAS A PAGAR
 function abrirModalPagar(id){
@@ -1114,7 +1104,7 @@ function renderPagar(){
   tb.innerHTML=lista.map(p=>{const a=vencStatus(p.venc,p.st);const ccNome=ERP.clientes.find(c=>c.id===p.ccId)?.nome||'ADM';return`<tr class="${a.cls}"><td>${p.desc||'—'}</td><td>${p.catNome||'—'}</td><td>${ccNome}</td><td>${p.venc?new Date(p.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><strong style="color:var(--red)">${fmt(p.val)}</strong></td><td><span class="badge ${p.st==='pago'?'b-green':p.st==='atraso'?'b-red':'b-yellow'}">${p.st||''}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalPagar('${p.id}')">✏️</button>${p.st!=='pago'?`<button class="btn btn-green btn-sm" onclick="baixarPag('${p.id}')">✓</button>`:''}<button class="btn btn-danger btn-sm" onclick="excluirPag('${p.id}')">🗑️</button></td></tr>`;}).join('');
 }
 function baixarPag(id){const p=ERP.pagar.find(x=>x.id===id);if(p){p.st='pago';p.dpag=new Date().toISOString().slice(0,10);salvarERP();renderPagar();renderDash();}}
-function excluirPag(id){if(!confirm('Excluir?'))return;ERP.pagar=ERP.pagar.filter(x=>x.id!==id);salvarERP();renderPagar();}
+function excluirPag(id){if(!confirm('Excluir?'))return;ERP.pagar=ERP.pagar.filter(x=>x.id!==id);_marcarExcluido('pagar',id);salvarERP();renderPagar();}
 
 // FOLHA
 function gerarFolha(){
@@ -1163,7 +1153,7 @@ function renderImpostos(){
   tb.innerHTML=lista.map(i=>{const a=vencStatus(i.venc,i.st);return`<tr class="${a.cls}"><td><span class="badge ${i.tipo==='DAS'?'b-red':i.tipo==='FGTS'?'b-blue':i.tipo==='INSS'?'b-orange':'b-gray'}">${i.tipo}</span>${i.ret==='sim'?'<span class="badge b-green" style="margin-left:4px;">Retenção</span>':''}</td><td>${i.desc||'—'}</td><td>${i.ccNome||'ADM'}</td><td>${i.comp?MESES[Number(i.comp.split('-')[1])-1]+'/'+i.comp.split('-')[0]:'—'}</td><td><strong style="color:${i.ret==='sim'?'var(--green)':'var(--red)'}">${fmt(i.val)}</strong></td><td>${i.venc?new Date(i.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><span class="badge ${i.st==='pago'?'b-green':i.st==='atraso'?'b-red':'b-yellow'}">${i.st||''}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalImposto('${i.id}')">✏️</button>${i.st!=='pago'?`<button class="btn btn-green btn-sm" onclick="pagarImp('${i.id}')">✓</button>`:''}<button class="btn btn-danger btn-sm" onclick="excluirImp('${i.id}')">🗑️</button></td></tr>`;}).join('');
 }
 function pagarImp(id){const i=ERP.impostos.find(x=>x.id===id);if(i){i.st='pago';i.dpag=new Date().toISOString().slice(0,10);salvarERP();renderImpostos();}}
-function excluirImp(id){if(!confirm('Excluir?'))return;ERP.impostos=ERP.impostos.filter(x=>x.id!==id);salvarERP();renderImpostos();}
+function excluirImp(id){if(!confirm('Excluir?'))return;ERP.impostos=ERP.impostos.filter(x=>x.id!==id);_marcarExcluido('impostos',id);salvarERP();renderImpostos();}
 
 // CONTAS VIRTUAIS
 function abrirModalConta(id){
@@ -1281,15 +1271,26 @@ function excluirCli(id){
     ? `Excluir "${cli.nome}"?\n\nIsso também vai apagar ${recVinc} lançamento(s) em Contas a Receber, ${pagVinc} em Contas a Pagar, ${impVinc} em Impostos e ${vdVinc} em Vendas vinculados a este cliente.\n\nEssa ação não pode ser desfeita.`
     : `Excluir "${cli.nome}"?`;
   if(!confirm(msg))return;
+  const recIds=ERP.receber.filter(r=>r.cliId===id).map(r=>r.id);
+  const pagIds=ERP.pagar.filter(p=>p.ccId===id).map(p=>p.id);
+  const impIds=ERP.impostos.filter(i=>i.ccId===id).map(i=>i.id);
+  const vdIds=ERP.vendas.filter(v=>v.cliId===id).map(v=>v.id);
   ERP.clientes=ERP.clientes.filter(x=>x.id!==id);
   // Antes, excluir um cliente deixava as parcelas geradas para ele "órfãs"
   // na Contas a Receber pra sempre (mesmo nome, mesmos valores, sem dono) —
   // é a causa mais provável dos lançamentos duplicados/fantasma que
-  // apareciam mesmo depois de corrigir o cliente. Agora remove tudo junto.
+  // apareciam mesmo depois de corrigir o cliente. Agora remove tudo junto,
+  // e marca cada um como excluído de propósito (tombstone) pra não
+  // reaparecer numa próxima mesclagem com o Sheets.
   ERP.receber=ERP.receber.filter(r=>r.cliId!==id);
   ERP.pagar=ERP.pagar.filter(p=>p.ccId!==id);
   ERP.impostos=ERP.impostos.filter(i=>i.ccId!==id);
   ERP.vendas=ERP.vendas.filter(v=>v.cliId!==id);
+  _marcarExcluido('clientes',id);
+  recIds.forEach(rid=>_marcarExcluido('receber',rid));
+  pagIds.forEach(pid=>_marcarExcluido('pagar',pid));
+  impIds.forEach(iid=>_marcarExcluido('impostos',iid));
+  vdIds.forEach(vid=>_marcarExcluido('vendas',vid));
   salvarERP();renderClientes();renderReceber();renderPagar();renderImpostos();renderVendas();renderDash();
 }
 
@@ -1334,6 +1335,7 @@ async function limparDadosReceber(){
   if(!confirm(msg))return;
   const idsRemover=new Set([...dupIds,...orfIds]);
   ERP.receber=ERP.receber.filter(r=>!idsRemover.has(r.id));
+  idsRemover.forEach(rid=>_marcarExcluido('receber',rid));
   salvarERP();renderReceber();renderDash();
   alert(`✅ ${idsRemover.size} lançamento(s) removido(s).`);
 }
@@ -1363,7 +1365,7 @@ function renderColabs(){
   const tb=document.getElementById('tb-col');if(!ERP.colaboradores.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Nenhum colaborador.</td></tr>';return;}
   tb.innerHTML=ERP.colaboradores.map(c=>{const ccNome=ERP.clientes.find(x=>x.id===c.ccId)?.nome||'ADM';return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span></td><td>${c.func||'—'}</td><td>${fmt(c.sal)}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${ccNome}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;}).join('');
 }
-function excluirCol(id){if(!confirm('Excluir?'))return;ERP.colaboradores=ERP.colaboradores.filter(x=>x.id!==id);salvarERP();renderColabs();}
+function excluirCol(id){if(!confirm('Excluir?'))return;ERP.colaboradores=ERP.colaboradores.filter(x=>x.id!==id);_marcarExcluido('colaboradores',id);salvarERP();renderColabs();}
 
 // SERVIÇOS
 function abrirModalServico(id){
@@ -1377,7 +1379,7 @@ function renderServicos(){
   if(!ERP.servicos.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:14px">Nenhum serviço.</td></tr>';return;}
   tb.innerHTML=ERP.servicos.map(s=>`<tr><td><strong>${s.nome}</strong>${s.descNF?`<div style="font-size:11px;color:var(--text3)">${s.descNF.slice(0,50)}...</div>`:''}</td><td><span class="badge b-blue">${cats[s.cat]||s.cat}</span></td><td>${uns[s.un]||s.un}</td><td><strong style="color:var(--green)">${fmt(s.valor)}</strong></td><td>${s.retPerc>0?`<span class="badge b-yellow">${s.retPerc}%</span>`:'—'}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalServico('${s.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirSv('${s.id}')">🗑️</button></td></tr>`).join('');
 }
-function excluirSv(id){if(!confirm('Excluir?'))return;ERP.servicos=ERP.servicos.filter(x=>x.id!==id);salvarERP();renderServicos();}
+function excluirSv(id){if(!confirm('Excluir?'))return;ERP.servicos=ERP.servicos.filter(x=>x.id!==id);_marcarExcluido('servicos',id);salvarERP();renderServicos();}
 
 // CATEGORIAS
 function abrirModalCat(id){
@@ -1393,7 +1395,7 @@ function renderCats(){
   document.getElementById('tb-cat-rec').innerHTML=rec.length?rec.map(c=>`<tr><td><strong>${c.nome}</strong></td><td><span class="badge b-green">${tL[c.tipo]||c.tipo}</span></td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalCat('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCat('${c.id}')">🗑️</button></td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:10px">Nenhuma.</td></tr>';
   document.getElementById('tb-cat-desp').innerHTML=desp.length?desp.map(c=>`<tr><td><strong>${c.nome}</strong></td><td><span class="badge ${c.tipo==='imposto'?'b-red':c.tipo==='pessoal'?'b-blue':c.tipo==='provisao'?'b-purple':'b-gray'}">${tL[c.tipo]||c.tipo}</span></td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalCat('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCat('${c.id}')">🗑️</button></td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:10px">Nenhuma.</td></tr>';
 }
-function excluirCat(id){if(!confirm('Excluir?'))return;ERP.categorias=ERP.categorias.filter(x=>x.id!==id);salvarERP();renderCats();}
+function excluirCat(id){if(!confirm('Excluir?'))return;ERP.categorias=ERP.categorias.filter(x=>x.id!==id);_marcarExcluido('categorias',id);salvarERP();renderCats();}
 
 // RECIBOS
 let tipoRec='cliente';
@@ -1456,42 +1458,23 @@ function sincronizarERP(){
   const btn=document.getElementById('btn-sync-erp');
   if(btn){btn.textContent='⏳ Sincronizando...';btn.disabled=true;}
   
-  // Sincronizar = PRIMEIRO busca do Sheets, DEPOIS envia se tiver dados locais
+  // Sincronizar = busca do Sheets, MESCLA com o que está na tela (nunca
+  // substitui às cegas), e só então envia de volta.
   fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})
     .then(function(data){
-      _pullInicialOk=true;
-      if(data){
-        // Guarda a contagem real que está no Sheets agora — referência para a
-        // guarda de segurança evitar que uma aba desatualizada sobrescreva
-        // dados mais completos que já estão no servidor.
-        _ultimoPull=_snapshotCounts(data);
-        var atualizado=false;
-        if(data.clientes&&data.clientes.length){ERP.clientes=data.clientes;atualizado=true;}
-        if(data.colaboradores&&data.colaboradores.length){ERP.colaboradores=data.colaboradores;atualizado=true;}
-        if(data.servicos&&data.servicos.length){ERP.servicos=data.servicos;atualizado=true;}
-        if(data.categorias&&data.categorias.length){ERP.categorias=data.categorias;atualizado=true;}
-        if(data.receber&&data.receber.length){ERP.receber=data.receber;atualizado=true;}
-        if(data.pagar&&data.pagar.length){ERP.pagar=data.pagar;atualizado=true;}
-        if(data.impostos&&data.impostos.length){ERP.impostos=data.impostos;atualizado=true;}
-        if(data.vendas&&data.vendas.length){ERP.vendas=data.vendas;atualizado=true;}
-        if(data.contas&&data.contas.length){ERP.contas=data.contas;atualizado=true;}
-        if(data.movimentos&&data.movimentos.length){ERP.movimentos=data.movimentos;atualizado=true;}
-        if(data.recibos&&data.recibos.length){ERP.recibos=data.recibos;atualizado=true;}
-        if(data.config&&Object.keys(data.config).length){ERP.config=data.config;atualizado=true;}
-        if(atualizado){
-          localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
-          atualizarTudo();
-          const st=document.getElementById('sync-status');
-          if(st){st.textContent='✅ Sincronizado '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
-        }
-      }
-      // Só envia para Sheets se tiver dados locais
+      const mesclado=_mesclarComServidor(data||{});
+      CATS_SYNC.forEach(function(cat){ERP[cat]=mesclado[cat];});
+      ERP.config=mesclado.config;
+      localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
+      atualizarTudo();
+      const st=document.getElementById('sync-status');
+      if(st){st.textContent='✅ Sincronizado '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
       if(temDados()) enviarParaSheets();
     })
     .catch(function(){
-      _pullInicialOk=true;
-      // Se não conseguiu buscar, pelo menos envia o que tem
+      // Se não conseguiu buscar, pelo menos envia o que tem (com mesclagem
+      // ainda acontecendo dentro de enviarParaSheets)
       if(temDados()) enviarParaSheets();
     })
     .finally(function(){
@@ -1521,25 +1504,17 @@ function carregarDoSheets(){
   return fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})
     .then(function(data){
-      _pullInicialOk=true;
       if(!data) return false;
-      _ultimoPull=_snapshotCounts(data);
-      var atualizado=false;
-      // Merge: só atualiza se o Sheets tiver dados
-      ['clientes','colaboradores','servicos','categorias','receber','pagar',
-       'impostos','vendas','contas','movimentos','recibos'].forEach(function(k){
-        if(data[k]&&data[k].length){ERP[k]=data[k];atualizado=true;}
-      });
-      if(data.config&&Object.keys(data.config).length){ERP.config=data.config;atualizado=true;}
-      if(atualizado){
-        localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
-        atualizarTudo();
-        var st=document.getElementById('sync-status');
-        if(st){st.textContent='✅ Dados carregados do Sheets em '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
-      }
+      const mesclado=_mesclarComServidor(data);
+      CATS_SYNC.forEach(function(cat){ERP[cat]=mesclado[cat];});
+      ERP.config=mesclado.config;
+      localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
+      atualizarTudo();
+      var st=document.getElementById('sync-status');
+      if(st){st.textContent='✅ Dados carregados do Sheets em '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
       return true;
     })
-    .catch(function(){_pullInicialOk=true;return false;});
+    .catch(function(){return false;});
 }
 // Ao abrir: PRIMEIRO busca do Sheets, depois o app está pronto para uso
 // Nunca envia dados vazios para o Sheets

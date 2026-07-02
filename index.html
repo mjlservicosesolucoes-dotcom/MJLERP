@@ -1214,9 +1214,36 @@ function renderClientes(){
   const tb=document.getElementById('tb-cli');if(!ERP.clientes.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Nenhum cliente.</td></tr>';return;}
   tb.innerHTML=ERP.clientes.map(c=>{
     let periodo='—';if(c.inicio){const ini=new Date(c.inicio+'T12:00');if(c.dur==='0')periodo=`${ini.toLocaleDateString('pt-BR')} (Indet.)`;else{const fim=new Date(ini);fim.setMonth(fim.getMonth()+Number(c.dur||1));periodo=`${ini.toLocaleDateString('pt-BR')} a ${fim.toLocaleDateString('pt-BR')}`;}}
-    return`<tr><td><strong>${c.nome}</strong>${c.cnpj?`<div style="font-size:11px;color:var(--text3)">${c.cnpj}</div>`:''}</td><td><span class="badge ${c.tipo==='fixo'?'b-blue':c.tipo==='cobertura'?'b-orange':'b-gray'}">${c.tipo==='fixo'?'Fixo':c.tipo==='cobertura'?'Cobertura':'Avulso'}</span></td><td>${c.svNome||'—'}</td><td><strong style="color:var(--green)">${fmt(c.valor)}</strong> / Dia ${c.diaVenc}</td><td style="font-size:11px;">${periodo}</td><td>${c.ret==='nao'?'<span class="badge b-gray">Não</span>':`<span class="badge b-yellow">${c.ret.toUpperCase()} ${c.retP}%</span>`}</td><td><span class="badge ${c.ativo!==false?'b-green':'b-gray'}">${c.ativo!==false?'Ativo':'Inativo'}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalCliente('${c.id}')">✏️</button><button class="btn btn-primary btn-sm" onclick="abrirModalReceber();setTimeout(()=>{document.getElementById('mrec-cli').value='${c.id}';preencherCli();},100)">💰</button><button class="btn btn-danger btn-sm" onclick="excluirCli('${c.id}')">🗑️</button></td></tr>`;
+    return`<tr><td><strong>${c.nome}</strong>${c.cnpj?`<div style="font-size:11px;color:var(--text3)">${c.cnpj}</div>`:''}</td><td><span class="badge ${c.tipo==='fixo'?'b-blue':c.tipo==='cobertura'?'b-orange':'b-gray'}">${c.tipo==='fixo'?'Fixo':c.tipo==='cobertura'?'Cobertura':'Avulso'}</span></td><td>${c.svNome||'—'}</td><td><strong style="color:var(--green)">${fmt(c.valor)}</strong> / Dia ${c.diaVenc}</td><td style="font-size:11px;">${periodo}</td><td>${c.ret==='nao'?'<span class="badge b-gray">Não</span>':`<span class="badge b-yellow">${c.ret.toUpperCase()} ${c.retP}%</span>`}</td><td><span class="badge ${c.ativo!==false?'b-green':'b-gray'}">${c.ativo!==false?'Ativo':'Inativo'}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalCliente('${c.id}')">✏️</button><button class="btn btn-ghost btn-sm" onclick="gerarParcelasCliente('${c.id}')" title="Gerar/completar parcelas mensais deste contrato (não duplica meses existentes)">🔄</button><button class="btn btn-primary btn-sm" onclick="abrirModalReceber();setTimeout(()=>{document.getElementById('mrec-cli').value='${c.id}';preencherCli();},100)">💰</button><button class="btn btn-danger btn-sm" onclick="excluirCli('${c.id}')">🗑️</button></td></tr>`;
   }).join('');
 }
+// Gera (ou completa) as parcelas mensais de um cliente que JÁ EXISTE, sem
+// duplicar clientes. Útil para: parcelas perdidas num incidente de sync,
+// renovação de contrato, ou contratos que nunca tiveram parcelas geradas.
+// Pula automaticamente qualquer mês que já tenha lançamento pra esse cliente.
+function gerarParcelasCliente(id){
+  const c=ERP.clientes.find(x=>x.id===id);if(!c)return;
+  if(c.tipo!=='fixo'||!(c.valor>0)||!c.inicio){alert('Isso só funciona para clientes do tipo "Fixo Mensal" com valor e início de contrato preenchidos. Lance manualmente em Contas a Receber pra esse cliente.');return;}
+  const sugestao=c.dur==='0'?'12':(c.dur||'12');
+  const durInput=prompt(`Gerar parcelas de "${c.nome}" a partir de ${new Date(c.inicio+'T12:00').toLocaleDateString('pt-BR')}.\n\nQuantos meses gerar? (meses que já têm lançamento são pulados automaticamente, não duplica)`,sugestao);
+  if(durInput===null)return;
+  const meses=Number(durInput);
+  if(!meses||meses<1){alert('Informe um número válido de meses.');return;}
+  const [iniY,iniM,iniD]=c.inicio.split('-').map(Number);
+  const sv=ERP.servicos.find(s=>s.id===c.svId);
+  let criadas=0,puladas=0;
+  for(let m=0;m<meses;m++){
+    const d=new Date(iniY,iniM-1+m,iniD);
+    const comp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    if(ERP.receber.some(r=>r.cliId===id&&r.comp===comp)){puladas++;continue;}
+    const vencD=new Date(d.getFullYear(),d.getMonth(),c.diaVenc||5);
+    ERP.receber.push({id:gid(),cliId:c.id,cliNome:c.nome,comp,desc:`${sv?.nome||c.svNome||'Servicos'} — ${MESES[d.getMonth()]}/${d.getFullYear()}`,val:c.valor,retP:c.retP||0,venc:vencD.toISOString().slice(0,10),st:'pendente',extras:[]});
+    criadas++;
+  }
+  salvarERP();renderReceber();renderDash();
+  alert(`✅ ${criadas} parcela(s) criada(s). ${puladas} mês(es) já tinha(m) lançamento e foram pulados (sem duplicar).`);
+}
+
 function excluirCli(id){
   const cli=ERP.clientes.find(x=>x.id===id);if(!cli)return;
   const recVinc=ERP.receber.filter(r=>r.cliId===id).length;

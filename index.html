@@ -216,7 +216,10 @@ tr:hover td{background:#fafbff;}
     <div class="page" id="page-receber">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <strong style="font-size:15px;color:var(--brand)">Contas a Receber</strong>
-        <button class="btn btn-primary btn-sm" onclick="abrirModalReceber()">+ Lançar</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="limparDadosReceber()" title="Verifica e remove lançamentos duplicados ou de clientes já excluídos">🧹 Limpar Duplicados/Órfãos</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalReceber()">+ Lançar</button>
+        </div>
       </div>
       <div class="filtros">
         <input type="text" id="rec-q" placeholder="🔍 Buscar..." oninput="renderReceber()">
@@ -1150,7 +1153,20 @@ function salvarCliente(){
   const id=document.getElementById('mcl-id').value;const svId=document.getElementById('mcl-sv').value;const sv=ERP.servicos.find(s=>s.id===svId);const tipo=document.getElementById('mcl-tipo').value;const valor=Number(document.getElementById('mcl-valor').value||0);const diaVenc=Number(document.getElementById('mcl-venc').value||5);const inicio=document.getElementById('mcl-inicio').value;const dur=document.getElementById('mcl-dur').value;
   const obj={id:id||gid(),nome,cnpj:document.getElementById('mcl-cnpj').value.trim(),resp:document.getElementById('mcl-resp').value.trim(),tel:document.getElementById('mcl-tel').value.trim(),tipo,svId,svNome:sv?.nome||'',valor,diaVenc,inicio,dur,ret:document.getElementById('mcl-ret').value,retP:Number(document.getElementById('mcl-ret-p').value||0),desc:document.getElementById('mcl-desc').value.trim(),obs:document.getElementById('mcl-obs').value.trim(),ativo:true};
   if(id){const i=ERP.clientes.findIndex(x=>x.id===id);ERP.clientes[i]=obj;}else ERP.clientes.push(obj);
-  if(!id&&tipo==='fixo'&&valor>0&&inicio){const meses=dur==='0'?1:Number(dur||1);for(let m=0;m<meses;m++){const d=new Date(inicio);d.setMonth(d.getMonth()+m);const comp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');const vencD=new Date(d.getFullYear(),d.getMonth(),diaVenc);ERP.receber.push({id:gid(),cliId:obj.id,cliNome:nome,comp,desc:`${sv?.nome||'Servicos'} — ${MESES[d.getMonth()]}/${d.getFullYear()}`,val:valor,retP:obj.retP,venc:vencD.toISOString().slice(0,10),st:'pendente',extras:[]});}}
+  if(!id&&tipo==='fixo'&&valor>0&&inicio){
+    const meses=dur==='0'?1:Number(dur||1);
+    // Corrige bug de fuso: 'new Date("2026-07-01")' é interpretado como UTC e,
+    // no fuso do Brasil (UTC-3), vira 30/06/2026 local — empurrando a
+    // competência inteira um mês pra trás. Construir com ano/mês/dia
+    // numéricos evita esse problema (fica sempre em horário local).
+    const [iniY,iniM,iniD]=inicio.split('-').map(Number);
+    for(let m=0;m<meses;m++){
+      const d=new Date(iniY,iniM-1+m,iniD);
+      const comp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      const vencD=new Date(d.getFullYear(),d.getMonth(),diaVenc);
+      ERP.receber.push({id:gid(),cliId:obj.id,cliNome:nome,comp,desc:`${sv?.nome||'Servicos'} — ${MESES[d.getMonth()]}/${d.getFullYear()}`,val:valor,retP:obj.retP,venc:vencD.toISOString().slice(0,10),st:'pendente',extras:[]});
+    }
+  }
   salvarERP();fm('modal-cli');renderClientes();
 }
 function renderClientes(){
@@ -1160,7 +1176,59 @@ function renderClientes(){
     return`<tr><td><strong>${c.nome}</strong>${c.cnpj?`<div style="font-size:11px;color:var(--text3)">${c.cnpj}</div>`:''}</td><td><span class="badge ${c.tipo==='fixo'?'b-blue':c.tipo==='cobertura'?'b-orange':'b-gray'}">${c.tipo==='fixo'?'Fixo':c.tipo==='cobertura'?'Cobertura':'Avulso'}</span></td><td>${c.svNome||'—'}</td><td><strong style="color:var(--green)">${fmt(c.valor)}</strong> / Dia ${c.diaVenc}</td><td style="font-size:11px;">${periodo}</td><td>${c.ret==='nao'?'<span class="badge b-gray">Não</span>':`<span class="badge b-yellow">${c.ret.toUpperCase()} ${c.retP}%</span>`}</td><td><span class="badge ${c.ativo!==false?'b-green':'b-gray'}">${c.ativo!==false?'Ativo':'Inativo'}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalCliente('${c.id}')">✏️</button><button class="btn btn-primary btn-sm" onclick="abrirModalReceber();setTimeout(()=>{document.getElementById('mrec-cli').value='${c.id}';preencherCli();},100)">💰</button><button class="btn btn-danger btn-sm" onclick="excluirCli('${c.id}')">🗑️</button></td></tr>`;
   }).join('');
 }
-function excluirCli(id){if(!confirm('Excluir?'))return;ERP.clientes=ERP.clientes.filter(x=>x.id!==id);salvarERP();renderClientes();}
+function excluirCli(id){
+  const cli=ERP.clientes.find(x=>x.id===id);if(!cli)return;
+  const recVinc=ERP.receber.filter(r=>r.cliId===id).length;
+  const pagVinc=ERP.pagar.filter(p=>p.ccId===id).length;
+  const impVinc=ERP.impostos.filter(i=>i.ccId===id).length;
+  const vdVinc=ERP.vendas.filter(v=>v.cliId===id).length;
+  const totalVinc=recVinc+pagVinc+impVinc+vdVinc;
+  const msg=totalVinc>0
+    ? `Excluir "${cli.nome}"?\n\nIsso também vai apagar ${recVinc} lançamento(s) em Contas a Receber, ${pagVinc} em Contas a Pagar, ${impVinc} em Impostos e ${vdVinc} em Vendas vinculados a este cliente.\n\nEssa ação não pode ser desfeita.`
+    : `Excluir "${cli.nome}"?`;
+  if(!confirm(msg))return;
+  ERP.clientes=ERP.clientes.filter(x=>x.id!==id);
+  // Antes, excluir um cliente deixava as parcelas geradas para ele "órfãs"
+  // na Contas a Receber pra sempre (mesmo nome, mesmos valores, sem dono) —
+  // é a causa mais provável dos lançamentos duplicados/fantasma que
+  // apareciam mesmo depois de corrigir o cliente. Agora remove tudo junto.
+  ERP.receber=ERP.receber.filter(r=>r.cliId!==id);
+  ERP.pagar=ERP.pagar.filter(p=>p.ccId!==id);
+  ERP.impostos=ERP.impostos.filter(i=>i.ccId!==id);
+  ERP.vendas=ERP.vendas.filter(v=>v.cliId!==id);
+  salvarERP();renderClientes();renderReceber();renderPagar();renderImpostos();renderVendas();renderDash();
+}
+
+// ================================================================
+// LIMPEZA DE DADOS — duplicados exatos e lançamentos órfãos
+// ================================================================
+// Ferramenta pra higienizar dados que já ficaram bagunçados por causa dos
+// bugs antigos (cliente excluído sem apagar as parcelas, cadastro em
+// duplicidade, etc). Uso manual, sempre pede confirmação antes de apagar.
+function detectarDuplicadosReceber(){
+  const vistos=new Map();const duplicados=[];
+  ERP.receber.forEach(r=>{
+    const chave=[r.cliId||'',r.comp||'',r.desc||'',Number(r.val||0),r.venc||''].join('|');
+    if(vistos.has(chave))duplicados.push(r.id);else vistos.set(chave,r.id);
+  });
+  return duplicados;
+}
+function detectarOrfaosReceber(){
+  return ERP.receber.filter(r=>r.cliId&&!ERP.clientes.some(c=>c.id===r.cliId)&&r.origem!=='venda').map(r=>r.id);
+}
+function limparDadosReceber(){
+  const dupIds=detectarDuplicadosReceber();
+  const orfIds=detectarOrfaosReceber().filter(id=>!dupIds.includes(id));
+  if(!dupIds.length&&!orfIds.length){alert('✅ Nenhum duplicado exato ou lançamento órfão encontrado em Contas a Receber.');return;}
+  const exemplos=[...dupIds,...orfIds].slice(0,6).map(id=>{const r=ERP.receber.find(x=>x.id===id);return r?`• ${r.cliNome||'(sem cliente)'} — ${r.desc||''} (${r.comp||''})`:'';}).join('\n');
+  const msg=`Encontrado(s):\n• ${dupIds.length} lançamento(s) duplicado(s) (mesmo cliente, competência, descrição e valor)\n• ${orfIds.length} lançamento(s) órfão(s) (cliente já foi excluído)\n\nExemplos:\n${exemplos}${(dupIds.length+orfIds.length)>6?'\n...':''}\n\nRemover esses ${dupIds.length+orfIds.length} lançamento(s)? Essa ação não pode ser desfeita.`;
+  if(!confirm(msg))return;
+  const idsRemover=new Set([...dupIds,...orfIds]);
+  ERP.receber=ERP.receber.filter(r=>!idsRemover.has(r.id));
+  salvarERP();renderReceber();renderDash();
+  alert(`✅ ${idsRemover.size} lançamento(s) removido(s).`);
+}
+// ================================================================
 
 // COLABORADORES
 function calcCustoCol(){

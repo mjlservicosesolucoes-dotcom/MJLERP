@@ -471,7 +471,16 @@ tr:hover td{background:#fafbff;}
       <div class="fg"><label>Tipo *</label><select id="mco-tipo" onchange="calcCustoCol()"><option value="CLT">CLT</option><option value="RPA">RPA</option><option value="PJ">PJ</option></select></div>
       <div class="fg"><label>Função</label><select id="mco-func"><option>ASG</option><option>Porteiro</option><option>Zelador</option><option>Vigia</option><option>Recepcionista</option><option>Outro</option></select></div>
     </div>
-    <div class="fr"><div class="fg"><label>Salário Base (R$)</label><input type="number" id="mco-sal" step="0.01" oninput="calcCustoCol()"></div><div class="fg"><label>Centro de Custo Principal</label><select id="mco-cc"><option value="">ADM Geral</option></select></div></div>
+    <div class="fr"><div class="fg"><label>Salário Base (R$)</label><input type="number" id="mco-sal" step="0.01" oninput="calcCustoCol()"></div><div class="fg"></div></div>
+    <div style="background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;color:var(--text2);">CENTRO DE CUSTO (RATEIO POR %)</label>
+        <button class="btn btn-ghost btn-sm" onclick="addRateioCol()">+ Cliente</button>
+      </div>
+      <div id="mco-rateio-lista"></div>
+      <div id="mco-rateio-total" style="font-size:11px;font-weight:700;margin-top:6px;text-align:right;"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">💡 Deixe um único cliente com 100% se ele trabalha só nesse contrato. Adicione mais linhas pra dividir entre vários contratos (ex: 40%/30%/30%). O rateio aparece no Centro de Custo — a Folha continua gerando um lançamento único.</div>
+    </div>
     <div id="mco-clt-box" style="background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
       <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;">ENCARGOS & PROVISÕES (calculados automaticamente)</div>
       <div class="fr3"><div class="fg" style="margin:0;"><label>FGTS 8%</label><input id="mco-fgts" readonly></div><div class="fg" style="margin:0;"><label>INSS Emp. 20%</label><input id="mco-inss" readonly></div><div class="fg" style="margin:0;"><label>Custo Total</label><input id="mco-total" readonly style="font-weight:700;color:var(--red);"></div></div>
@@ -916,6 +925,25 @@ function renderFluxo(){
 }
 
 // CENTRO DE CUSTO
+// Rateio de colaboradores entre clientes (Centro de Custo). Colaboradores
+// antigos com só um "ccId" viram automaticamente um rateio de 100% pra
+// aquele cliente — não precisa reeditar ninguém. Isso NÃO afeta a Folha,
+// que continua gerando um lançamento único por colaborador.
+function _rateiosDoColab(c){
+  if(c.rateios&&c.rateios.length)return c.rateios;
+  if(c.ccId)return [{ccId:c.ccId,pct:100}];
+  return [{ccId:'',pct:100}];
+}
+function _detalheRateioPorCliente(cliId){
+  const linhas=[];
+  ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
+    const custo=c.custoTotal||c.sal||0;
+    _rateiosDoColab(c).forEach(r=>{
+      if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:c.nome,pct:Number(r.pct),val:custo*Number(r.pct)/100});
+    });
+  });
+  return linhas;
+}
 function renderCC(){
   const sel=document.getElementById('cc-mes');const mes=sel?.value||getMes();const el=document.getElementById('cc-body');let html='';
   ERP.clientes.forEach(cli=>{
@@ -924,7 +952,9 @@ function renderCC(){
     const ret=rec.reduce((s,r)=>s+Number(r.val||0)*Number(r.retP||0)/100,0);
     const pag=ERP.pagar.filter(p=>p.ccId===cli.id&&p.venc?.slice(0,7)===mes);
     const imp=ERP.impostos.filter(i=>i.ccId===cli.id&&i.comp===mes&&i.ret!=='sim');
-    const custos=pag.reduce((s,p)=>s+Number(p.val||0),0)+imp.reduce((s,i)=>s+Number(i.val||0),0);
+    const rateioLinhas=_detalheRateioPorCliente(cli.id);
+    const maoObra=rateioLinhas.reduce((s,r)=>s+r.val,0);
+    const custos=pag.reduce((s,p)=>s+Number(p.val||0),0)+imp.reduce((s,i)=>s+Number(i.val||0),0)+maoObra;
     const das=receita*Number(ERP.config.aliq||6)/100;
     const margem=receita-ret-das-custos;const perc=receita>0?margem/receita*100:0;
     html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow);">
@@ -933,6 +963,7 @@ function renderCC(){
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>Receita Bruta</span><strong style="color:var(--green)">${fmt(receita)}</strong></div>
         ${ret>0?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) Retenções</span><span>(${fmt(ret)})</span></div>`:''}
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) DAS (${ERP.config.aliq}%)</span><span>(${fmt(das)})</span></div>
+        ${rateioLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span>(${fmt(r.val)})</span></div>`).join('')}
         ${pag.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${p.desc}</span><span>(${fmt(p.val)})</span></div>`).join('')}
         ${imp.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${i.tipo}: ${i.desc}</span><span>(${fmt(i.val)})</span></div>`).join('')}
         <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Margem</span><strong style="color:${margem>=0?'var(--green)':'var(--red)'}">${fmt(margem)} (${fmtP(perc)})</strong></div>
@@ -941,8 +972,9 @@ function renderCC(){
   });
   const pagAdm=ERP.pagar.filter(p=>!p.ccId&&p.venc?.slice(0,7)===mes);
   const impAdm=ERP.impostos.filter(i=>!i.ccId&&i.comp===mes&&i.ret!=='sim');
-  const totAdm=pagAdm.reduce((s,p)=>s+Number(p.val||0),0)+impAdm.reduce((s,i)=>s+Number(i.val||0),0);
-  if(totAdm>0)html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;"><div style="background:#5a6a7a;color:#fff;padding:12px 16px;"><strong>⚙️ ADM Geral</strong></div><div style="padding:12px 16px;">${[...pagAdm,...impAdm].map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc||p.tipo||''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Total ADM</span><strong style="color:var(--red)">${fmt(totAdm)}</strong></div></div></div>`;
+  const rateioAdmLinhas=_detalheRateioPorCliente('');
+  const totAdm=pagAdm.reduce((s,p)=>s+Number(p.val||0),0)+impAdm.reduce((s,i)=>s+Number(i.val||0),0)+rateioAdmLinhas.reduce((s,r)=>s+r.val,0);
+  if(totAdm>0)html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;"><div style="background:#5a6a7a;color:#fff;padding:12px 16px;"><strong>⚙️ ADM Geral</strong></div><div style="padding:12px 16px;">${rateioAdmLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span style="color:var(--red)">${fmt(r.val)}</span></div>`).join('')}${[...pagAdm,...impAdm].map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc||p.tipo||''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Total ADM</span><strong style="color:var(--red)">${fmt(totAdm)}</strong></div></div></div>`;
   el.innerHTML=html||'<div class="info-box blue">Cadastre clientes para ver o centro de custo.</div>';
 }
 
@@ -1342,28 +1374,81 @@ async function limparDadosReceber(){
 // ================================================================
 
 // COLABORADORES
+let _rateiosCol=[];
 function calcCustoCol(){
   const sal=Number(document.getElementById('mco-sal')?.value||0);const tipo=document.getElementById('mco-tipo')?.value;
   if(tipo==='CLT'){const f=sal*0.08,n=sal*0.20,c=sal+f+n,pf=sal*1.333/12,pd=sal/12,pr=sal*0.5/12,pj=sal*Number(ERP.config.jurPerc||5)/100,pt=pf+pd+pr+pj;document.getElementById('mco-fgts').value=fmt(f);document.getElementById('mco-inss').value=fmt(n);document.getElementById('mco-total').value=fmt(c);document.getElementById('mco-pf').value=fmt(pf);document.getElementById('mco-p13').value=fmt(pd);document.getElementById('mco-pres').value=fmt(pr+pj);document.getElementById('mco-ptot').value=fmt(pt);document.getElementById('mco-clt-box').style.display='block';}
   else{document.getElementById('mco-total').value=fmt(sal);document.getElementById('mco-clt-box').style.display='none';}
 }
+function renderRateiosCol(){
+  document.getElementById('mco-rateio-lista').innerHTML=_rateiosCol.length?_rateiosCol.map((r,i)=>`<div class="item-venda">
+      <select style="flex:2;" onchange="_rateiosCol[${i}].ccId=this.value">
+        <option value="" ${!r.ccId?'selected':''}>ADM Geral (não rateado)</option>
+        ${ERP.clientes.map(c=>`<option value="${c.id}" ${c.id===r.ccId?'selected':''}>${c.nome}</option>`).join('')}
+      </select>
+      <input type="number" value="${r.pct}" min="0" max="100" step="1" style="width:70px;" placeholder="%" oninput="_rateiosCol[${i}].pct=Number(this.value)||0;renderRateiosCol()">
+      <span style="font-size:12px;color:var(--text3);">%</span>
+      <button class="btn btn-danger btn-sm" onclick="_rateiosCol.splice(${i},1);renderRateiosCol()">×</button>
+    </div>`).join(''):'<p style="color:var(--text3);font-size:12px;margin:4px 0 6px;">Nenhum rateio — o custo fica em ADM Geral por padrão.</p>';
+  const total=_rateiosCol.reduce((s,r)=>s+Number(r.pct||0),0);
+  const el=document.getElementById('mco-rateio-total');
+  if(_rateiosCol.length){
+    el.textContent=`Total: ${total}%`+(total===100?' ✅':total>100?' — passou de 100%, ajuste':' — falta '+(100-total)+'% pra completar 100%');
+    el.style.color=total===100?'var(--green)':'var(--red)';
+  } else el.textContent='';
+}
+function addRateioCol(){
+  const usado=_rateiosCol.reduce((s,r)=>s+Number(r.pct||0),0);
+  _rateiosCol.push({ccId:'',pct:Math.max(0,100-usado)});
+  renderRateiosCol();
+}
 function abrirModalColab(id){
-  const ccs=document.getElementById('mco-cc');ccs.innerHTML='<option value="">ADM Geral</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
-  if(id){const c=ERP.colaboradores.find(x=>x.id===id);document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-cc').value=c.ccId||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';}
-  else{['mco-id','mco-nome','mco-cpf','mco-sal','mco-pix','mco-banco'].forEach(x=>document.getElementById(x).value='');document.getElementById('mco-tipo').value='CLT';document.getElementById('mco-func').value='ASG';document.getElementById('mco-cc').value='';}
-  calcCustoCol();abrirModal('modal-col');
+  if(id){
+    const c=ERP.colaboradores.find(x=>x.id===id);
+    document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';
+    // Compatibilidade: colaboradores antigos só tinham um ccId único — isso
+    // vira automaticamente um rateio de 100% pra esse mesmo cliente.
+    if(c.rateios&&c.rateios.length)_rateiosCol=c.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
+    else if(c.ccId)_rateiosCol=[{ccId:c.ccId,pct:100}];
+    else _rateiosCol=[];
+  }
+  else{
+    ['mco-id','mco-nome','mco-cpf','mco-sal','mco-pix','mco-banco'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('mco-tipo').value='CLT';document.getElementById('mco-func').value='ASG';
+    _rateiosCol=[];
+  }
+  renderRateiosCol();calcCustoCol();abrirModal('modal-col');
 }
 function salvarColab(){
   const nome=document.getElementById('mco-nome').value.trim();if(!nome){alert('Informe o nome.');return;}
+  const total=_rateiosCol.reduce((s,r)=>s+Number(r.pct||0),0);
+  if(_rateiosCol.length&&total!==100){
+    if(!confirm(`O rateio está somando ${total}% (não 100%). Isso vai deixar o Centro de Custo com um cálculo parcial. Salvar mesmo assim?`))return;
+  }
   const id=document.getElementById('mco-id').value;const sal=Number(document.getElementById('mco-sal').value||0);const tipo=document.getElementById('mco-tipo').value;
   const pf=tipo==='CLT'?sal*1.333/12:0,pd=tipo==='CLT'?sal/12:0,pr=tipo==='CLT'?sal*0.5/12:0,pj=tipo==='CLT'?sal*Number(ERP.config.jurPerc||5)/100:0;
-  const obj={id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,fgts:tipo==='CLT'?sal*0.08:0,inss:tipo==='CLT'?sal*0.20:0,custoTotal:tipo==='CLT'?sal*1.28:sal,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:document.getElementById('mco-cc').value,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true};
+  const rateios=_rateiosCol.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
+  // ccId principal = maior fatia do rateio (mantém compatibilidade com a
+  // Folha, que continua gerando um único lançamento por colaborador).
+  const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
+  const obj={id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,fgts:tipo==='CLT'?sal*0.08:0,inss:tipo==='CLT'?sal*0.20:0,custoTotal:tipo==='CLT'?sal*1.28:sal,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:principal?principal.ccId:'',rateios,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true};
   if(id){const i=ERP.colaboradores.findIndex(x=>x.id===id);ERP.colaboradores[i]=obj;}else ERP.colaboradores.push(obj);
   salvarERP();fm('modal-col');renderColabs();
 }
 function renderColabs(){
   const tb=document.getElementById('tb-col');if(!ERP.colaboradores.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">Nenhum colaborador.</td></tr>';return;}
-  tb.innerHTML=ERP.colaboradores.map(c=>{const ccNome=ERP.clientes.find(x=>x.id===c.ccId)?.nome||'ADM';return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span></td><td>${c.func||'—'}</td><td>${fmt(c.sal)}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${ccNome}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;}).join('');
+  tb.innerHTML=ERP.colaboradores.map(c=>{
+    const rateios=(c.rateios&&c.rateios.length)?c.rateios:(c.ccId?[{ccId:c.ccId,pct:100}]:[]);
+    let centroCell;
+    if(rateios.length>1){
+      const detalhe=rateios.map(r=>`${ERP.clientes.find(x=>x.id===r.ccId)?.nome||'ADM Geral'}: ${r.pct}%`).join(' • ');
+      centroCell=`<span class="badge b-purple" title="${detalhe}">🔀 ${rateios.length} contratos</span>`;
+    } else {
+      const nome=rateios.length?(ERP.clientes.find(x=>x.id===rateios[0].ccId)?.nome||'ADM Geral'):'ADM Geral';
+      centroCell=nome;
+    }
+    return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span></td><td>${c.func||'—'}</td><td>${fmt(c.sal)}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${centroCell}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;
+  }).join('');
 }
 function excluirCol(id){if(!confirm('Excluir?'))return;ERP.colaboradores=ERP.colaboradores.filter(x=>x.id!==id);_marcarExcluido('colaboradores',id);salvarERP();renderColabs();}
 

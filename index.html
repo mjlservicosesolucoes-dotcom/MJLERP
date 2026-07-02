@@ -652,13 +652,39 @@ tr:hover td{background:#fafbff;}
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:6,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[]};
 let _syncDebounceTimer=null;
+// Verdadeira causa da perda de dados mais recente: a busca inicial (pull) ao
+// abrir a página só dispara em 1500ms, mas o envio (push) depois de salvar
+// disparava em apenas 1200ms — ou seja, se você cadastrasse algo rápido logo
+// ao abrir, o envio podia disparar ANTES da busca inicial terminar. Nesse
+// instante a aba só tinha o que você acabou de digitar na memória (nada do
+// que já existia no Sheets) e mandava isso por cima, apagando o resto.
+// Agora nenhum envio acontece antes da primeira busca confirmar os dados.
+let _pullInicialOk=false;
+let _esperaEnvioDesde=null;
 function salvarERP(){
   localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
   // Debounce: se o usuário salvar vários lançamentos em sequência rápida,
   // agrupa tudo em um único envio ao Sheets em vez de disparar um POST
   // por clique (reduz risco de duas sincronizações conflitantes por perto).
   if(_syncDebounceTimer)clearTimeout(_syncDebounceTimer);
-  _syncDebounceTimer=setTimeout(function(){enviarParaSheets();},1200);
+  _syncDebounceTimer=setTimeout(_tentarEnviarERP,1200);
+}
+function _tentarEnviarERP(){
+  const url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
+  if(url&&navigator.onLine&&!_pullInicialOk){
+    if(!_esperaEnvioDesde)_esperaEnvioDesde=Date.now();
+    if(Date.now()-_esperaEnvioDesde<8000){
+      const st=document.getElementById('sync-status');
+      if(st){st.textContent='⏳ Confirmando dados atuais do Sheets antes de enviar (evita sobrescrever)...';st.style.color='var(--yellow)';}
+      _syncDebounceTimer=setTimeout(_tentarEnviarERP,600);
+      return;
+    }
+    // Esperou 8s e a busca inicial não respondeu (rede lenta/instável).
+    // Segue com o envio pra não perder o que foi digitado, mas avisa.
+    const st=document.getElementById('sync-status');
+    if(st){st.textContent='⚠️ Não deu pra confirmar o Sheets a tempo — enviando mesmo assim. Confira os dados depois de sincronizar.';st.style.color='var(--red)';}
+  }
+  enviarParaSheets();
 }
 
 function temDados(){
@@ -1434,6 +1460,7 @@ function sincronizarERP(){
   fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})
     .then(function(data){
+      _pullInicialOk=true;
       if(data){
         // Guarda a contagem real que está no Sheets agora — referência para a
         // guarda de segurança evitar que uma aba desatualizada sobrescreva
@@ -1463,6 +1490,7 @@ function sincronizarERP(){
       if(temDados()) enviarParaSheets();
     })
     .catch(function(){
+      _pullInicialOk=true;
       // Se não conseguiu buscar, pelo menos envia o que tem
       if(temDados()) enviarParaSheets();
     })
@@ -1493,6 +1521,7 @@ function carregarDoSheets(){
   return fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})
     .then(function(data){
+      _pullInicialOk=true;
       if(!data) return false;
       _ultimoPull=_snapshotCounts(data);
       var atualizado=false;
@@ -1510,7 +1539,7 @@ function carregarDoSheets(){
       }
       return true;
     })
-    .catch(function(){return false;});
+    .catch(function(){_pullInicialOk=true;return false;});
 }
 // Ao abrir: PRIMEIRO busca do Sheets, depois o app está pronto para uso
 // Nunca envia dados vazios para o Sheets

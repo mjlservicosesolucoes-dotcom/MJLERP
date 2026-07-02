@@ -217,7 +217,7 @@ tr:hover td{background:#fafbff;}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <strong style="font-size:15px;color:var(--brand)">Contas a Receber</strong>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost btn-sm" onclick="limparDadosReceber()" title="Verifica e remove lançamentos duplicados ou de clientes já excluídos">🧹 Limpar Duplicados/Órfãos</button>
+          <button class="btn btn-ghost btn-sm" id="btn-limpar-rec" onclick="limparDadosReceber()" title="Verifica e remove lançamentos duplicados ou de clientes já excluídos">🧹 Limpar Duplicados/Órfãos</button>
           <button class="btn btn-primary btn-sm" onclick="abrirModalReceber()">+ Lançar</button>
         </div>
       </div>
@@ -669,11 +669,52 @@ function temDados(){
          ERP.servicos.length>0||ERP.movimentos.length>0;
 }
 
+// ================================================================
+// GUARDA DE SEGURANÇA CONTRA SOBRESCRITA COM DADOS DESATUALIZADOS
+// ================================================================
+// Guarda quantos registros existiam na ÚLTIMA vez que esta aba confirmou
+// estar sincronizada com o Sheets (depois de um pull bem-sucedido). Se, na
+// hora de enviar, os dados locais tiverem MENOS registros do que essa
+// referência, é sinal de que essa aba pode estar desatualizada (ou alguém
+// excluiu algo de propósito) — nesse caso, pedimos confirmação explícita
+// antes de sobrescrever o Sheets, em vez de mandar por cima silenciosamente.
+let _ultimoPull=null;
+function _snapshotCounts(obj){
+  return {
+    clientes:(obj.clientes||[]).length,
+    colaboradores:(obj.colaboradores||[]).length,
+    receber:(obj.receber||[]).length,
+    pagar:(obj.pagar||[]).length,
+    impostos:(obj.impostos||[]).length,
+    vendas:(obj.vendas||[]).length,
+    servicos:(obj.servicos||[]).length,
+    movimentos:(obj.movimentos||[]).length
+  };
+}
+function _quedaSuspeita(){
+  if(!_ultimoPull)return null; // ainda não temos referência confiável — não bloqueia
+  const atual=_snapshotCounts(ERP);const problemas=[];
+  Object.keys(_ultimoPull).forEach(function(k){
+    if(_ultimoPull[k]>0&&atual[k]<_ultimoPull[k]){problemas.push('• '+k+': tinha '+_ultimoPull[k]+', agora '+atual[k]);}
+  });
+  return problemas.length?problemas:null;
+}
+// ================================================================
+
 function enviarParaSheets(){
   var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
   if(!url||!navigator.onLine) return;
   // Só envia se tiver dados reais — evita apagar o Sheets com dados vazios
   if(!temDados()) return;
+  const st=document.getElementById('sync-status');
+  const problemas=_quedaSuspeita();
+  if(problemas){
+    const ok=confirm('⚠️ ATENÇÃO: esta aba tem MENOS registros do que a última sincronização confirmada com o Sheets:\n\n'+problemas.join('\n')+'\n\nSe você excluiu isso de propósito agora mesmo, clique OK para enviar mesmo assim.\n\nSe não tem certeza — ou se essa aba ficou aberta por muito tempo — clique Cancelar e clique em ☁️ Sincronizar primeiro para buscar os dados mais recentes antes de enviar. Enviar por engano pode apagar dados de outros clientes/lançamentos no Sheets.');
+    if(!ok){
+      if(st){st.textContent='⚠️ Envio bloqueado por segurança (dados locais menores que o Sheets). Clique em ☁️ Sincronizar antes de continuar.';st.style.color='var(--red)';}
+      return;
+    }
+  }
   var payload={acao:'syncAll',dados:{
     clientes:ERP.clientes,colaboradores:ERP.colaboradores,
     servicos:ERP.servicos,categorias:ERP.categorias,
@@ -681,11 +722,11 @@ function enviarParaSheets(){
     vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
     recibos:ERP.recibos,config:ERP.config
   }};
-  const st=document.getElementById('sync-status');
   fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(function(){
       // mode:'no-cors' não deixa ler a resposta, mas se chegou aqui o navegador
       // não bloqueou o envio.
+      _ultimoPull=_snapshotCounts(ERP);
       if(st){st.textContent='☁️ Enviado ao Sheets '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
     })
     .catch(function(){
@@ -1216,12 +1257,27 @@ function detectarDuplicadosReceber(){
 function detectarOrfaosReceber(){
   return ERP.receber.filter(r=>r.cliId&&!ERP.clientes.some(c=>c.id===r.cliId)&&r.origem!=='venda').map(r=>r.id);
 }
-function limparDadosReceber(){
+async function limparDadosReceber(){
+  const url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
+  if(!url){alert('Configure a URL do Sheets em Configurações antes de usar esta ferramenta.');return;}
+  if(!navigator.onLine){alert('Sem conexão com a internet. Conecte-se antes de usar esta ferramenta — ela precisa confirmar os dados mais recentes do Sheets antes de apagar qualquer coisa.');return;}
+  const btn=document.getElementById('btn-limpar-rec');
+  if(btn){btn.textContent='⏳ Confirmando dados com o Sheets...';btn.disabled=true;}
+  // SEMPRE busca a versão mais recente do Sheets antes de decidir o que é
+  // duplicado ou órfão. Foi exatamente a falta disso que causou perda de
+  // dados antes: uma aba desatualizada achou que clientes reais eram
+  // "órfãos" só porque não estavam na memória DAQUELA aba.
+  const ok=await carregarDoSheets();
+  if(btn){btn.textContent='🧹 Limpar Duplicados/Órfãos';btn.disabled=false;}
+  if(!ok){
+    alert('⚠️ Não foi possível confirmar os dados mais recentes do Sheets agora (falha de rede). Por segurança, a limpeza foi cancelada. Tente de novo quando a conexão estiver estável.');
+    return;
+  }
   const dupIds=detectarDuplicadosReceber();
   const orfIds=detectarOrfaosReceber().filter(id=>!dupIds.includes(id));
-  if(!dupIds.length&&!orfIds.length){alert('✅ Nenhum duplicado exato ou lançamento órfão encontrado em Contas a Receber.');return;}
+  if(!dupIds.length&&!orfIds.length){alert('✅ Dados confirmados com o Sheets — nenhum duplicado exato ou lançamento órfão encontrado.');return;}
   const exemplos=[...dupIds,...orfIds].slice(0,6).map(id=>{const r=ERP.receber.find(x=>x.id===id);return r?`• ${r.cliNome||'(sem cliente)'} — ${r.desc||''} (${r.comp||''})`:'';}).join('\n');
-  const msg=`Encontrado(s):\n• ${dupIds.length} lançamento(s) duplicado(s) (mesmo cliente, competência, descrição e valor)\n• ${orfIds.length} lançamento(s) órfão(s) (cliente já foi excluído)\n\nExemplos:\n${exemplos}${(dupIds.length+orfIds.length)>6?'\n...':''}\n\nRemover esses ${dupIds.length+orfIds.length} lançamento(s)? Essa ação não pode ser desfeita.`;
+  const msg=`Depois de confirmar com o Sheets, encontrado(s):\n• ${dupIds.length} lançamento(s) duplicado(s) (mesmo cliente, competência, descrição e valor)\n• ${orfIds.length} lançamento(s) órfão(s) (cliente realmente não existe mais)\n\nExemplos:\n${exemplos}${(dupIds.length+orfIds.length)>6?'\n...':''}\n\nRemover esses ${dupIds.length+orfIds.length} lançamento(s)? Essa ação não pode ser desfeita.`;
   if(!confirm(msg))return;
   const idsRemover=new Set([...dupIds,...orfIds]);
   ERP.receber=ERP.receber.filter(r=>!idsRemover.has(r.id));
@@ -1352,6 +1408,10 @@ function sincronizarERP(){
     .then(function(r){return r.json();})
     .then(function(data){
       if(data){
+        // Guarda a contagem real que está no Sheets agora — referência para a
+        // guarda de segurança evitar que uma aba desatualizada sobrescreva
+        // dados mais completos que já estão no servidor.
+        _ultimoPull=_snapshotCounts(data);
         var atualizado=false;
         if(data.clientes&&data.clientes.length){ERP.clientes=data.clientes;atualizado=true;}
         if(data.colaboradores&&data.colaboradores.length){ERP.colaboradores=data.colaboradores;atualizado=true;}
@@ -1402,11 +1462,12 @@ popularMeses('filtro-mes');popularMeses('cc-mes');
 // Buscar dados do Sheets ao abrir
 function carregarDoSheets(){
   var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
-  if(!url||!navigator.onLine) return;
-  fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
+  if(!url||!navigator.onLine) return Promise.resolve(false);
+  return fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})
     .then(function(data){
-      if(!data) return;
+      if(!data) return false;
+      _ultimoPull=_snapshotCounts(data);
       var atualizado=false;
       // Merge: só atualiza se o Sheets tiver dados
       ['clientes','colaboradores','servicos','categorias','receber','pagar',
@@ -1420,8 +1481,9 @@ function carregarDoSheets(){
         var st=document.getElementById('sync-status');
         if(st){st.textContent='✅ Dados carregados do Sheets em '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
       }
+      return true;
     })
-    .catch(function(){});
+    .catch(function(){return false;});
 }
 // Ao abrir: PRIMEIRO busca do Sheets, depois o app está pronto para uso
 // Nunca envia dados vazios para o Sheets

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v2</title>
+<title>MJL ERP Financeiro v3</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -285,7 +285,7 @@ tr:hover td{background:#fafbff;}
         <button class="btn btn-primary btn-sm" onclick="gerarFolha()">⚡ Gerar Folha do Mês</button>
       </div>
       <div class="card" style="padding:0;"><div class="table-wrap"><table>
-        <thead><tr><th>Colaborador</th><th>Tipo</th><th>Salário Base</th><th>FGTS 8%</th><th>INSS Emp.</th><th>Custo Total</th><th>Prov. Férias/mês</th><th>Prov. 13°/mês</th><th>Centro</th></tr></thead>
+        <thead><tr><th>Colaborador</th><th>Tipo</th><th>Remuneração (base+adic.)</th><th>FGTS 8%</th><th>INSS Emp.</th><th>Custo Total</th><th>Prov. Férias/mês</th><th>Prov. 13°/mês</th><th>Centro</th></tr></thead>
         <tbody id="tb-folha"></tbody>
       </table></div></div>
     </div>
@@ -350,7 +350,7 @@ tr:hover td{background:#fafbff;}
         <button class="btn btn-primary btn-sm" onclick="abrirModalColab()">+ Novo</button>
       </div>
       <div class="card" style="padding:0;"><div class="table-wrap"><table>
-        <thead><tr><th>Nome</th><th>Tipo</th><th>Função</th><th>Salário</th><th>Custo Total</th><th>Provisão/mês</th><th>Centro</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Nome</th><th>Tipo</th><th>Função</th><th>Remuneração</th><th>Custo Total</th><th>Provisão/mês</th><th>Centro</th><th>Ações</th></tr></thead>
         <tbody id="tb-col"></tbody>
       </table></div></div>
     </div>
@@ -471,7 +471,14 @@ tr:hover td{background:#fafbff;}
       <div class="fg"><label>Tipo *</label><select id="mco-tipo" onchange="calcCustoCol()"><option value="CLT">CLT</option><option value="RPA">RPA</option><option value="PJ">PJ</option></select></div>
       <div class="fg"><label>Função</label><select id="mco-func"><option>ASG</option><option>Porteiro</option><option>Zelador</option><option>Vigia</option><option>Recepcionista</option><option>Outro</option></select></div>
     </div>
-    <div class="fr"><div class="fg"><label>Salário Base (R$)</label><input type="number" id="mco-sal" step="0.01" oninput="calcCustoCol()"></div><div class="fg"></div></div>
+    <div class="fr"><div class="fg"><label>Salário Base (R$)</label><input type="number" id="mco-sal" step="0.01" oninput="calcCustoCol()"></div><div class="fg"><label>Hora Extra — média/mês (R$)</label><input type="number" id="mco-he" step="0.01" oninput="calcCustoCol()"></div></div>
+    <div class="fr3">
+      <div class="fg"><label>Adic. Noturno (R$)</label><input type="number" id="mco-adnot" step="0.01" oninput="calcCustoCol()"></div>
+      <div class="fg"><label>Insalubridade (R$)</label><input type="number" id="mco-insal" step="0.01" oninput="calcCustoCol()"></div>
+      <div class="fg"><label>Periculosidade (R$)</label><input type="number" id="mco-peric" step="0.01" oninput="calcCustoCol()"></div>
+    </div>
+    <div class="fr"><div class="fg"><label>Outros adicionais (R$)</label><input type="number" id="mco-outros" step="0.01" oninput="calcCustoCol()"></div><div class="fg"><label>Remuneração Total</label><input id="mco-rem" readonly style="font-weight:700;color:var(--brand);"></div></div>
+    <div style="font-size:11px;color:var(--text3);margin:-6px 0 12px;">💡 Informe os adicionais em R$ (valor médio mensal). Encargos, provisões e o Centro de Custo passam a ser calculados sobre a Remuneração Total — assim você vê o custo real de cada condomínio.</div>
     <div style="background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <label style="font-size:11px;font-weight:700;color:var(--text2);">CENTRO DE CUSTO (RATEIO POR %)</label>
@@ -671,6 +678,7 @@ const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agos
 let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:6,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[]};
 const CATS_SYNC=['clientes','colaboradores','servicos','categorias','receber','pagar','impostos','vendas','contas','movimentos','recibos'];
 let _syncDebounceTimer=null;
+var _pendenteEnvio=false;
 function salvarERP(){
   localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
   // Debounce: agrupa varios salvamentos rapidos num unico ciclo de sync.
@@ -719,6 +727,17 @@ function _marcarExcluido(cat,id){
   localStorage.setItem('mjl_erp_excluidos',JSON.stringify(ex));
 }
 function _mesclarComServidor(serverData){
+  // Absorve exclusões feitas em OUTROS dispositivos (tombstones do servidor)
+  if(serverData&&serverData.excluidos){
+    const exLocal=_carregarExcluidos();
+    Object.keys(serverData.excluidos).forEach(function(cat){
+      if(!exLocal[cat])exLocal[cat]={};
+      Object.keys(serverData.excluidos[cat]||{}).forEach(function(id){
+        exLocal[cat][id]=Math.max(Number(exLocal[cat][id]||0),Number(serverData.excluidos[cat][id]||0));
+      });
+    });
+    localStorage.setItem('mjl_erp_excluidos',JSON.stringify(exLocal));
+  }
   const excluidos=_carregarExcluidos();
   const resultado={};
   CATS_SYNC.forEach(function(cat){
@@ -727,7 +746,13 @@ function _mesclarComServidor(serverData){
       if(item&&item.id&&!(excluidos[cat]&&excluidos[cat][item.id]))map.set(item.id,item);
     });
     (ERP[cat]||[]).forEach(function(item){
-      if(item&&item.id&&!(excluidos[cat]&&excluidos[cat][item.id]))map.set(item.id,item);
+      if(!item||!item.id)return;
+      if(excluidos[cat]&&excluidos[cat][item.id])return;
+      const srv=map.get(item.id);
+      // Se os dois têm data de atualização, vence o MAIS NOVO — uma aba/celular
+      // desatualizado nunca mais sobrescreve uma edição mais recente.
+      if(srv&&Number(srv.up||0)>Number(item.up||0))return;
+      map.set(item.id,item);
     });
     resultado[cat]=Array.from(map.values());
   });
@@ -738,7 +763,8 @@ function _mesclarComServidor(serverData){
 
 function enviarParaSheets(){
   var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
-  if(!url||!navigator.onLine) return;
+  if(!url) return;
+  if(!navigator.onLine){_pendenteEnvio=true;var so=document.getElementById('sync-status');if(so){so.textContent='\ud83d\udcf4 Offline — alterações salvas no aparelho. Enviarei ao Sheets assim que a internet voltar.';so.style.color='var(--text3)';}return;}
   if(!temDados()) return;
   const st=document.getElementById('sync-status');
   if(st){st.textContent='\u2601\ufe0f Confirmando dados atuais do Sheets antes de enviar...';st.style.color='var(--text3)';}
@@ -746,12 +772,19 @@ function enviarParaSheets(){
     .then(function(r){return r.json();})
     .catch(function(){return null;})
     .then(function(serverData){
+      if(serverData===null){
+        // NÃO conseguiu ler a versão atual do Sheets — enviar agora poderia
+        // apagar dados que só existem lá. Aborta e tenta de novo depois.
+        _pendenteEnvio=true;
+        if(st){st.textContent='\u26a0\ufe0f Sem resposta do Sheets — envio adiado para proteger seus dados. Tentarei de novo automaticamente.';st.style.color='var(--red)';}
+        return;
+      }
       const mesclado=_mesclarComServidor(serverData||{});
       CATS_SYNC.forEach(function(cat){ERP[cat]=mesclado[cat];});
       ERP.config=mesclado.config;
       localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
       if(document.querySelector('.page.active'))atualizarTudo();
-      var payload={acao:'syncAll',dados:{
+      var payload={acao:'syncAll',excluidos:_carregarExcluidos(),dados:{
         clientes:ERP.clientes,colaboradores:ERP.colaboradores,
         servicos:ERP.servicos,categorias:ERP.categorias,
         receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
@@ -760,9 +793,11 @@ function enviarParaSheets(){
       }};
       return fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
         .then(function(){
+          _pendenteEnvio=false;
           if(st){st.textContent='\u2601\ufe0f Enviado ao Sheets '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
         })
         .catch(function(){
+          _pendenteEnvio=true;
           if(st){st.textContent='\u26a0\ufe0f Falha ao enviar para o Sheets -- verifique a conexao ou a URL em Configuracoes.';st.style.color='var(--red)';}
         });
     });
@@ -946,7 +981,7 @@ function _rateiosDoColab(c){
 function _detalheRateioPorCliente(cliId){
   const linhas=[];
   ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
-    const custo=c.custoTotal||c.sal||0;
+    const custo=c.custoTotal||remCol(c)||0;
     _rateiosDoColab(c).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:c.nome,pct:Number(r.pct),val:custo*Number(r.pct)/100});
     });
@@ -1080,7 +1115,7 @@ function calcRecLiq(){
 function salvarReceber(){
   const id=document.getElementById('mrec-id').value;const cliId=document.getElementById('mrec-cli').value;const cli=ERP.clientes.find(c=>c.id===cliId);
   const base=Number(document.getElementById('mrec-val').value||0);const extras=_extrasRec.reduce((s,e)=>s+Number(e.val||0)*Number(e.qty||1),0);const total=base+extras;
-  const obj={id:id||gid(),cliId,cliNome:cli?.nome||'',comp:document.getElementById('mrec-comp').value,desc:document.getElementById('mrec-desc').value.trim(),val:total,valBase:base,extras:[..._extrasRec],retP:Number(document.getElementById('mrec-ret').value||0),venc:document.getElementById('mrec-venc').value,st:document.getElementById('mrec-st').value,drec:document.getElementById('mrec-drec').value,obs:document.getElementById('mrec-obs').value.trim()};
+  const obj={up:Date.now(),id:id||gid(),cliId,cliNome:cli?.nome||'',comp:document.getElementById('mrec-comp').value,desc:document.getElementById('mrec-desc').value.trim(),val:total,valBase:base,extras:[..._extrasRec],retP:Number(document.getElementById('mrec-ret').value||0),venc:document.getElementById('mrec-venc').value,st:document.getElementById('mrec-st').value,drec:document.getElementById('mrec-drec').value,obs:document.getElementById('mrec-obs').value.trim()};
   if(id){const i=ERP.receber.findIndex(x=>x.id===id);ERP.receber[i]=obj;}else ERP.receber.push(obj);
   salvarERP();fm('modal-rec');renderReceber();renderDash();_extrasRec=[];
 }
@@ -1100,7 +1135,7 @@ function renderReceber(){
   }).join('');
 }
 function editarRec(id){const r=ERP.receber.find(x=>x.id===id);_extrasRec=[...(r.extras||[])];abrirModalReceber(id);}
-function baixarRec(id){const r=ERP.receber.find(x=>x.id===id);if(r){r.st='recebido';r.drec=new Date().toISOString().slice(0,10);salvarERP();renderReceber();renderDash();}}
+function baixarRec(id){const r=ERP.receber.find(x=>x.id===id);if(r){r.up=Date.now();r.st='recebido';r.drec=new Date().toISOString().slice(0,10);salvarERP();renderReceber();renderDash();}}
 function excluirRec(id){if(!confirm('Excluir?'))return;ERP.receber=ERP.receber.filter(x=>x.id!==id);_marcarExcluido('receber',id);salvarERP();renderReceber();}
 
 // VENDAS
@@ -1123,9 +1158,9 @@ function salvarVenda(){
   const cliId=document.getElementById('mvd-cli').value;const cli=ERP.clientes.find(c=>c.id===cliId);
   const tot=_itensVd.reduce((s,it)=>s+Number(it.val||0)*Number(it.qty||1),0);const retP=Number(document.getElementById('mvd-ret').value||0);
   const id=document.getElementById('mvd-id').value;
-  const obj={id:id||gid(),cliId,cliNome:cli?.nome||'',data:document.getElementById('mvd-data').value,venc:document.getElementById('mvd-venc').value,itens:[..._itensVd],val:tot,retP,obs:document.getElementById('mvd-obs').value.trim(),st:'pendente'};
+  const obj={up:Date.now(),id:id||gid(),cliId,cliNome:cli?.nome||'',data:document.getElementById('mvd-data').value,venc:document.getElementById('mvd-venc').value,itens:[..._itensVd],val:tot,retP,obs:document.getElementById('mvd-obs').value.trim(),st:'pendente'};
   if(id){const i=ERP.vendas.findIndex(x=>x.id===id);ERP.vendas[i]=obj;}else ERP.vendas.push(obj);
-  if(!id){const comp=obj.data?.slice(0,7)||getMes();ERP.receber.push({id:gid(),cliId,cliNome:cli?.nome||'',comp,desc:obj.itens.map(it=>it.desc).join(', ')||'Venda avulsa',val:tot,retP,venc:obj.venc,st:'pendente',origem:'venda',vendaId:obj.id});}
+  if(!id){const comp=obj.data?.slice(0,7)||getMes();ERP.receber.push({up:Date.now(),id:gid(),cliId,cliNome:cli?.nome||'',comp,desc:obj.itens.map(it=>it.desc).join(', ')||'Venda avulsa',val:tot,retP,venc:obj.venc,st:'pendente',origem:'venda',vendaId:obj.id});}
   salvarERP();fm('modal-vd');renderVendas();renderReceber();renderDash();_itensVd=[];
 }
 function renderVendas(){
@@ -1188,7 +1223,7 @@ function salvarPagar(){
   const id=document.getElementById('mpag-id').value;const catId=document.getElementById('mpag-cat').value;const cat=ERP.categorias.find(c=>c.id===catId);
   const rateios=_rateiosPag.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
   const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
-  const obj={id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,ccId:principal?principal.ccId:'',rateios,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
+  const obj={up:Date.now(),id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,ccId:principal?principal.ccId:'',rateios,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
   if(id){const i=ERP.pagar.findIndex(x=>x.id===id);ERP.pagar[i]=obj;}else ERP.pagar.push(obj);
   salvarERP();fm('modal-pag');renderPagar();renderDash();
 }
@@ -1215,7 +1250,7 @@ function renderPagar(){
     return`<tr class="${a.cls}"><td>${p.desc||'—'}</td><td>${p.catNome||'—'}</td><td>${ccCell}</td><td>${p.venc?new Date(p.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><strong style="color:var(--red)">${fmt(p.val)}</strong></td><td><span class="badge ${p.st==='pago'?'b-green':p.st==='atraso'?'b-red':'b-yellow'}">${p.st||''}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalPagar('${p.id}')">✏️</button>${p.st!=='pago'?`<button class="btn btn-green btn-sm" onclick="baixarPag('${p.id}')">✓</button>`:''}<button class="btn btn-danger btn-sm" onclick="excluirPag('${p.id}')">🗑️</button></td></tr>`;
   }).join('');
 }
-function baixarPag(id){const p=ERP.pagar.find(x=>x.id===id);if(p){p.st='pago';p.dpag=new Date().toISOString().slice(0,10);salvarERP();renderPagar();renderDash();}}
+function baixarPag(id){const p=ERP.pagar.find(x=>x.id===id);if(p){p.up=Date.now();p.st='pago';p.dpag=new Date().toISOString().slice(0,10);salvarERP();renderPagar();renderDash();}}
 function excluirPag(id){if(!confirm('Excluir?'))return;ERP.pagar=ERP.pagar.filter(x=>x.id!==id);_marcarExcluido('pagar',id);salvarERP();renderPagar();}
 
 // FOLHA
@@ -1225,11 +1260,12 @@ function gerarFolha(){
   if(ERP.pagar.some(p=>p.comp===mes&&p.catNome?.includes('Folha'))&&!confirm('Já existe folha para este mês. Continuar?'))return;
   const conta=ERP.contas.find(c=>c.tipo==='provisao');
   cols.forEach(col=>{
-    ERP.pagar.push({id:gid(),desc:`Salário — ${col.nome} (${col.tipo})`,catNome:col.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:col.sal,venc:mes+'-05',ccId:col.ccId||'',st:'pendente',comp:mes});
+    const remF=remCol(col);
+    ERP.pagar.push({up:Date.now(),id:gid(),desc:`Salário — ${col.nome} (${col.tipo})`,catNome:col.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:remF,venc:mes+'-05',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
     if(col.tipo==='CLT'){
-      ERP.pagar.push({id:gid(),desc:`FGTS — ${col.nome}`,catNome:'Encargos FGTS',val:col.sal*0.08,venc:mes+'-07',ccId:col.ccId||'',st:'pendente',comp:mes});
-      ERP.pagar.push({id:gid(),desc:`INSS Emp. — ${col.nome}`,catNome:'Encargos INSS',val:col.sal*0.20,venc:mes+'-20',ccId:col.ccId||'',st:'pendente',comp:mes});
-      if(col.provMes>0&&conta){ERP.movimentos.push({id:gid(),contaId:conta.id,tipo:'deposito',val:col.provMes,data:new Date().toISOString().slice(0,10),comp:mes,desc:`Provisão RH — ${col.nome}`});conta.saldo=(conta.saldo||0)+col.provMes;}
+      ERP.pagar.push({up:Date.now(),id:gid(),desc:`FGTS — ${col.nome}`,catNome:'Encargos FGTS',val:remF*0.08,venc:mes+'-07',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
+      ERP.pagar.push({up:Date.now(),id:gid(),desc:`INSS Emp. — ${col.nome}`,catNome:'Encargos INSS',val:remF*0.20,venc:mes+'-20',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
+      if(col.provMes>0&&conta){ERP.movimentos.push({up:Date.now(),id:gid(),contaId:conta.id,tipo:'deposito',val:col.provMes,data:new Date().toISOString().slice(0,10),comp:mes,desc:`Provisão RH — ${col.nome}`});conta.saldo=(conta.saldo||0)+col.provMes;}
     }
   });
   salvarERP();renderFolha();renderPagar();alert('✅ Folha gerada! Provisão RH atualizada.');
@@ -1238,8 +1274,8 @@ function renderFolha(){
   const tb=document.getElementById('tb-folha');const cols=ERP.colaboradores.filter(c=>c.ativo!==false);
   if(!cols.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:14px">Nenhum colaborador.</td></tr>';return;}
   let tC=0,tP=0;
-  tb.innerHTML=cols.map(col=>{tC+=col.custoTotal||col.sal;tP+=col.provMes||0;const ccNome=ERP.clientes.find(c=>c.id===col.ccId)?.nome||'ADM';
-    return`<tr><td><strong>${col.nome}</strong></td><td><span class="badge ${col.tipo==='CLT'?'b-blue':'b-orange'}">${col.tipo}</span></td><td>${fmt(col.sal)}</td><td>${col.tipo==='CLT'?fmt(col.sal*0.08):'—'}</td><td>${col.tipo==='CLT'?fmt(col.sal*0.20):'—'}</td><td><strong style="color:var(--red)">${fmt(col.custoTotal||col.sal)}</strong></td><td style="color:var(--purple)">${col.tipo==='CLT'?fmt(col.sal*1.333/12):'—'}</td><td style="color:var(--purple)">${col.tipo==='CLT'?fmt(col.sal/12):'—'}</td><td>${ccNome}</td></tr>`;
+  tb.innerHTML=cols.map(col=>{const remF=remCol(col);tC+=col.custoTotal||remF;tP+=col.provMes||0;const ccNome=ERP.clientes.find(c=>c.id===col.ccId)?.nome||'ADM';
+    return`<tr><td><strong>${col.nome}</strong></td><td><span class="badge ${col.tipo==='CLT'?'b-blue':'b-orange'}">${col.tipo}</span></td><td>${fmt(remF)}${remF>Number(col.sal||0)?`<div style="font-size:10px;color:var(--text3)">base ${fmt(col.sal)}</div>`:''}</td><td>${col.tipo==='CLT'?fmt(remF*0.08):'—'}</td><td>${col.tipo==='CLT'?fmt(remF*0.20):'—'}</td><td><strong style="color:var(--red)">${fmt(col.custoTotal||remF)}</strong></td><td style="color:var(--purple)">${col.tipo==='CLT'?fmt(remF*1.333/12):'—'}</td><td style="color:var(--purple)">${col.tipo==='CLT'?fmt(remF/12):'—'}</td><td>${ccNome}</td></tr>`;
   }).join('')+`<tr style="background:var(--bg);font-weight:700;"><td colspan="5">TOTAIS</td><td style="color:var(--red)">${fmt(tC)}</td><td colspan="2" style="color:var(--purple)">Prov: ${fmt(tP)}/mês</td><td></td></tr>`;
 }
 
@@ -1252,7 +1288,7 @@ function abrirModalImposto(id){
 }
 function salvarImposto(){
   const id=document.getElementById('mimp-id').value;const ccId=document.getElementById('mimp-cc').value;const ccNome=ERP.clientes.find(c=>c.id===ccId)?.nome||'ADM Geral';
-  const obj={id:id||gid(),tipo:document.getElementById('mimp-tipo').value,comp:document.getElementById('mimp-comp').value,desc:document.getElementById('mimp-desc').value.trim(),val:Number(document.getElementById('mimp-val').value||0),venc:document.getElementById('mimp-venc').value,ccId,ccNome,ret:document.getElementById('mimp-ret').value,st:document.getElementById('mimp-st').value,dpag:document.getElementById('mimp-dpag').value};
+  const obj={up:Date.now(),id:id||gid(),tipo:document.getElementById('mimp-tipo').value,comp:document.getElementById('mimp-comp').value,desc:document.getElementById('mimp-desc').value.trim(),val:Number(document.getElementById('mimp-val').value||0),venc:document.getElementById('mimp-venc').value,ccId,ccNome,ret:document.getElementById('mimp-ret').value,st:document.getElementById('mimp-st').value,dpag:document.getElementById('mimp-dpag').value};
   if(id){const i=ERP.impostos.findIndex(x=>x.id===id);ERP.impostos[i]=obj;}else ERP.impostos.push(obj);
   salvarERP();fm('modal-imp');renderImpostos();
 }
@@ -1273,7 +1309,7 @@ function abrirModalConta(id){
   else{['mct-id','mct-nome','mct-banco'].forEach(x=>document.getElementById(x).value='');document.getElementById('mct-tipo').value='provisao';document.getElementById('mct-saldo').value=0;}
   abrirModal('modal-conta');
 }
-function salvarConta(){const nome=document.getElementById('mct-nome').value.trim();if(!nome){alert('Informe o nome.');return;}const id=document.getElementById('mct-id').value;const obj={id:id||gid(),nome,tipo:document.getElementById('mct-tipo').value,banco:document.getElementById('mct-banco').value.trim(),saldo:Number(document.getElementById('mct-saldo').value||0)};if(id){const i=ERP.contas.findIndex(x=>x.id===id);ERP.contas[i]=obj;}else ERP.contas.push(obj);salvarERP();fm('modal-conta');renderContas();}
+function salvarConta(){const nome=document.getElementById('mct-nome').value.trim();if(!nome){alert('Informe o nome.');return;}const id=document.getElementById('mct-id').value;const obj={up:Date.now(),id:id||gid(),nome,tipo:document.getElementById('mct-tipo').value,banco:document.getElementById('mct-banco').value.trim(),saldo:Number(document.getElementById('mct-saldo').value||0)};if(id){const i=ERP.contas.findIndex(x=>x.id===id);ERP.contas[i]=obj;}else ERP.contas.push(obj);salvarERP();fm('modal-conta');renderContas();}
 function abrirMov(cid){
   const c=ERP.contas.find(x=>x.id===cid);if(!c)return;
   document.getElementById('mmov-cid').value=cid;document.getElementById('mmov-info').textContent=`${c.nome} — Saldo atual: ${fmt(c.saldo||0)}`;document.getElementById('mmov-tipo').value='deposito';document.getElementById('mmov-val').value='';document.getElementById('mmov-data').value=new Date().toISOString().slice(0,10);document.getElementById('mmov-comp').value=getMes();document.getElementById('mmov-desc').value='';
@@ -1283,7 +1319,7 @@ function salvarMov(){
   const cid=document.getElementById('mmov-cid').value;const val=Number(document.getElementById('mmov-val').value||0);if(!val){alert('Informe o valor.');return;}
   const tipo=document.getElementById('mmov-tipo').value;const c=ERP.contas.find(x=>x.id===cid);if(!c)return;
   if(tipo==='deposito')c.saldo=(c.saldo||0)+val;else c.saldo=Math.max(0,(c.saldo||0)-val);
-  ERP.movimentos.push({id:gid(),contaId:cid,tipo,val,data:document.getElementById('mmov-data').value,comp:document.getElementById('mmov-comp').value,desc:document.getElementById('mmov-desc').value.trim()});
+  ERP.movimentos.push({up:Date.now(),id:gid(),contaId:cid,tipo,val,data:document.getElementById('mmov-data').value,comp:document.getElementById('mmov-comp').value,desc:document.getElementById('mmov-desc').value.trim()});
   salvarERP();fm('modal-mov');renderContas();renderDash();
 }
 function renderContas(){
@@ -1297,14 +1333,14 @@ function calcularProvRH(){
   const cols=ERP.colaboradores.filter(c=>c.ativo!==false&&c.tipo==='CLT');if(!cols.length){alert('Nenhum CLT.');return;}
   const conta=ERP.contas.find(c=>c.tipo==='provisao');if(!conta){alert('Crie uma Conta Virtual de Provisão RH primeiro.');return;}
   const mes=getMes();let total=0;
-  cols.forEach(col=>{const v=col.provMes||0;total+=v;ERP.movimentos.push({id:gid(),contaId:conta.id,tipo:'deposito',val:v,data:new Date().toISOString().slice(0,10),comp:mes,desc:`Provisão RH — ${col.nome}`});conta.saldo=(conta.saldo||0)+v;});
+  cols.forEach(col=>{const v=col.provMes||0;total+=v;ERP.movimentos.push({up:Date.now(),id:gid(),contaId:conta.id,tipo:'deposito',val:v,data:new Date().toISOString().slice(0,10),comp:mes,desc:`Provisão RH — ${col.nome}`});conta.saldo=(conta.saldo||0)+v;});
   salvarERP();renderProvRH();renderContas();alert(`✅ Provisão ${fmt(total)} depositada em "${conta.nome}"!`);
 }
 function renderProvRH(){
   const el=document.getElementById('prov-rh-body');const cols=ERP.colaboradores.filter(c=>c.ativo!==false&&c.tipo==='CLT');
   if(!cols.length){el.innerHTML='<div class="info-box orange">Nenhum colaborador CLT cadastrado.</div>';return;}
   let tTot=0;
-  el.innerHTML='<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Salário</th><th>Férias+1/3 (1/12)</th><th>13° Salário (1/12)</th><th>Rescisão (0,5/12)</th><th>Jurídico ('+ERP.config.jurPerc+'%)</th><th>Total/mês</th></tr></thead><tbody>'+cols.map(col=>{const f=col.sal*1.333/12,d=col.sal/12,r=col.sal*0.5/12,j=col.sal*Number(ERP.config.jurPerc||5)/100,tot=f+d+r+j;col.provMes=tot;tTot+=tot;return`<tr><td><strong>${col.nome}</strong></td><td>${fmt(col.sal)}</td><td style="color:var(--purple)">${fmt(f)}</td><td style="color:var(--purple)">${fmt(d)}</td><td style="color:var(--purple)">${fmt(r)}</td><td style="color:var(--purple)">${fmt(j)}</td><td><strong style="color:var(--purple)">${fmt(tot)}</strong></td></tr>`;}).join('')+`<tr style="background:var(--purple-light);font-weight:700;"><td colspan="6">TOTAL/MÊS</td><td style="color:var(--purple)">${fmt(tTot)}</td></tr></tbody></table></div></div>`;
+  el.innerHTML='<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Remuneração</th><th>Férias+1/3 (1/12)</th><th>13° Salário (1/12)</th><th>Rescisão (0,5/12)</th><th>Jurídico ('+ERP.config.jurPerc+'%)</th><th>Total/mês</th></tr></thead><tbody>'+cols.map(col=>{const remF=remCol(col);const f=remF*1.333/12,d=remF/12,r=remF*0.5/12,j=remF*Number(ERP.config.jurPerc||5)/100,tot=f+d+r+j;col.provMes=tot;tTot+=tot;return`<tr><td><strong>${col.nome}</strong></td><td>${fmt(remF)}</td><td style="color:var(--purple)">${fmt(f)}</td><td style="color:var(--purple)">${fmt(d)}</td><td style="color:var(--purple)">${fmt(r)}</td><td style="color:var(--purple)">${fmt(j)}</td><td><strong style="color:var(--purple)">${fmt(tot)}</strong></td></tr>`;}).join('')+`<tr style="background:var(--purple-light);font-weight:700;"><td colspan="6">TOTAL/MÊS</td><td style="color:var(--purple)">${fmt(tTot)}</td></tr></tbody></table></div></div>`;
   salvarERP();
 }
 
@@ -1320,7 +1356,7 @@ function abrirModalCliente(id){
 function salvarCliente(){
   const nome=document.getElementById('mcl-nome').value.trim();if(!nome){alert('Informe o nome.');return;}
   const id=document.getElementById('mcl-id').value;const svId=document.getElementById('mcl-sv').value;const sv=ERP.servicos.find(s=>s.id===svId);const tipo=document.getElementById('mcl-tipo').value;const valor=Number(document.getElementById('mcl-valor').value||0);const diaVenc=Number(document.getElementById('mcl-venc').value||5);const inicio=document.getElementById('mcl-inicio').value;const dur=document.getElementById('mcl-dur').value;
-  const obj={id:id||gid(),nome,cnpj:document.getElementById('mcl-cnpj').value.trim(),resp:document.getElementById('mcl-resp').value.trim(),tel:document.getElementById('mcl-tel').value.trim(),tipo,svId,svNome:sv?.nome||'',valor,diaVenc,inicio,dur,ret:document.getElementById('mcl-ret').value,retP:Number(document.getElementById('mcl-ret-p').value||0),desc:document.getElementById('mcl-desc').value.trim(),obs:document.getElementById('mcl-obs').value.trim(),ativo:true};
+  const obj={up:Date.now(),id:id||gid(),nome,cnpj:document.getElementById('mcl-cnpj').value.trim(),resp:document.getElementById('mcl-resp').value.trim(),tel:document.getElementById('mcl-tel').value.trim(),tipo,svId,svNome:sv?.nome||'',valor,diaVenc,inicio,dur,ret:document.getElementById('mcl-ret').value,retP:Number(document.getElementById('mcl-ret-p').value||0),desc:document.getElementById('mcl-desc').value.trim(),obs:document.getElementById('mcl-obs').value.trim(),ativo:true};
   if(id){const i=ERP.clientes.findIndex(x=>x.id===id);ERP.clientes[i]=obj;}else ERP.clientes.push(obj);
   if(!id&&tipo==='fixo'&&valor>0&&inicio){
     const meses=dur==='0'?1:Number(dur||1);
@@ -1333,7 +1369,7 @@ function salvarCliente(){
       const d=new Date(iniY,iniM-1+m,iniD);
       const comp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
       const vencD=new Date(d.getFullYear(),d.getMonth(),diaVenc);
-      ERP.receber.push({id:gid(),cliId:obj.id,cliNome:nome,comp,desc:`${sv?.nome||'Servicos'} — ${MESES[d.getMonth()]}/${d.getFullYear()}`,val:valor,retP:obj.retP,venc:vencD.toISOString().slice(0,10),st:'pendente',extras:[]});
+      ERP.receber.push({up:Date.now(),id:gid(),cliId:obj.id,cliNome:nome,comp,desc:`${sv?.nome||'Servicos'} — ${MESES[d.getMonth()]}/${d.getFullYear()}`,val:valor,retP:obj.retP,venc:vencD.toISOString().slice(0,10),st:'pendente',extras:[]});
     }
   }
   salvarERP();fm('modal-cli');renderClientes();
@@ -1365,7 +1401,7 @@ function gerarParcelasCliente(id){
     const comp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     if(ERP.receber.some(r=>r.cliId===id&&r.comp===comp)){puladas++;continue;}
     const vencD=new Date(d.getFullYear(),d.getMonth(),c.diaVenc||5);
-    ERP.receber.push({id:gid(),cliId:c.id,cliNome:c.nome,comp,desc:`${sv?.nome||c.svNome||'Servicos'} — ${MESES[d.getMonth()]}/${d.getFullYear()}`,val:c.valor,retP:c.retP||0,venc:vencD.toISOString().slice(0,10),st:'pendente',extras:[]});
+    ERP.receber.push({up:Date.now(),id:gid(),cliId:c.id,cliNome:c.nome,comp,desc:`${sv?.nome||c.svNome||'Servicos'} — ${MESES[d.getMonth()]}/${d.getFullYear()}`,val:c.valor,retP:c.retP||0,venc:vencD.toISOString().slice(0,10),st:'pendente',extras:[]});
     criadas++;
   }
   salvarERP();renderReceber();renderDash();
@@ -1455,8 +1491,11 @@ async function limparDadosReceber(){
 
 // COLABORADORES
 let _rateiosCol=[];
+function _lerAdicCol(){const g=x=>Number(document.getElementById(x)?.value||0);return{sal:g('mco-sal'),he:g('mco-he'),adnot:g('mco-adnot'),insal:g('mco-insal'),peric:g('mco-peric'),outros:g('mco-outros')};}
+function remCol(c){if(!c)return 0;if(c.rem!=null)return Number(c.rem)||0;return Number(c.sal||0)+Number(c.he||0)+Number(c.adnot||0)+Number(c.insal||0)+Number(c.peric||0)+Number(c.outros||0);}
 function calcCustoCol(){
-  const sal=Number(document.getElementById('mco-sal')?.value||0);const tipo=document.getElementById('mco-tipo')?.value;
+  const a=_lerAdicCol();const sal=a.sal+a.he+a.adnot+a.insal+a.peric+a.outros;const tipo=document.getElementById('mco-tipo')?.value;
+  const remEl=document.getElementById('mco-rem');if(remEl)remEl.value=fmt(sal);
   if(tipo==='CLT'){const f=sal*0.08,n=sal*0.20,c=sal+f+n,pf=sal*1.333/12,pd=sal/12,pr=sal*0.5/12,pj=sal*Number(ERP.config.jurPerc||5)/100,pt=pf+pd+pr+pj;document.getElementById('mco-fgts').value=fmt(f);document.getElementById('mco-inss').value=fmt(n);document.getElementById('mco-total').value=fmt(c);document.getElementById('mco-pf').value=fmt(pf);document.getElementById('mco-p13').value=fmt(pd);document.getElementById('mco-pres').value=fmt(pr+pj);document.getElementById('mco-ptot').value=fmt(pt);document.getElementById('mco-clt-box').style.display='block';}
   else{document.getElementById('mco-total').value=fmt(sal);document.getElementById('mco-clt-box').style.display='none';}
 }
@@ -1485,7 +1524,7 @@ function addRateioCol(){
 function abrirModalColab(id){
   if(id){
     const c=ERP.colaboradores.find(x=>x.id===id);
-    document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';
+    document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-he').value=c.he||'';document.getElementById('mco-adnot').value=c.adnot||'';document.getElementById('mco-insal').value=c.insal||'';document.getElementById('mco-peric').value=c.peric||'';document.getElementById('mco-outros').value=c.outros||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';
     // Compatibilidade: colaboradores antigos só tinham um ccId único — isso
     // vira automaticamente um rateio de 100% pra esse mesmo cliente.
     if(c.rateios&&c.rateios.length)_rateiosCol=c.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
@@ -1493,7 +1532,7 @@ function abrirModalColab(id){
     else _rateiosCol=[];
   }
   else{
-    ['mco-id','mco-nome','mco-cpf','mco-sal','mco-pix','mco-banco'].forEach(x=>document.getElementById(x).value='');
+    ['mco-id','mco-nome','mco-cpf','mco-sal','mco-he','mco-adnot','mco-insal','mco-peric','mco-outros','mco-pix','mco-banco'].forEach(x=>document.getElementById(x).value='');
     document.getElementById('mco-tipo').value='CLT';document.getElementById('mco-func').value='ASG';
     _rateiosCol=[];
   }
@@ -1505,13 +1544,13 @@ function salvarColab(){
   if(_rateiosCol.length&&total!==100){
     if(!confirm(`O rateio está somando ${total}% (não 100%). Isso vai deixar o Centro de Custo com um cálculo parcial. Salvar mesmo assim?`))return;
   }
-  const id=document.getElementById('mco-id').value;const sal=Number(document.getElementById('mco-sal').value||0);const tipo=document.getElementById('mco-tipo').value;
-  const pf=tipo==='CLT'?sal*1.333/12:0,pd=tipo==='CLT'?sal/12:0,pr=tipo==='CLT'?sal*0.5/12:0,pj=tipo==='CLT'?sal*Number(ERP.config.jurPerc||5)/100:0;
+  const id=document.getElementById('mco-id').value;const a=_lerAdicCol();const sal=a.sal;const rem=a.sal+a.he+a.adnot+a.insal+a.peric+a.outros;const tipo=document.getElementById('mco-tipo').value;
+  const pf=tipo==='CLT'?rem*1.333/12:0,pd=tipo==='CLT'?rem/12:0,pr=tipo==='CLT'?rem*0.5/12:0,pj=tipo==='CLT'?rem*Number(ERP.config.jurPerc||5)/100:0;
   const rateios=_rateiosCol.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
   // ccId principal = maior fatia do rateio (mantém compatibilidade com a
   // Folha, que continua gerando um único lançamento por colaborador).
   const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
-  const obj={id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,fgts:tipo==='CLT'?sal*0.08:0,inss:tipo==='CLT'?sal*0.20:0,custoTotal:tipo==='CLT'?sal*1.28:sal,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:principal?principal.ccId:'',rateios,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true};
+  const obj={up:Date.now(),id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,he:a.he,adnot:a.adnot,insal:a.insal,peric:a.peric,outros:a.outros,rem,fgts:tipo==='CLT'?rem*0.08:0,inss:tipo==='CLT'?rem*0.20:0,custoTotal:tipo==='CLT'?rem*1.28:rem,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:principal?principal.ccId:'',rateios,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true,up:Date.now()};
   if(id){const i=ERP.colaboradores.findIndex(x=>x.id===id);ERP.colaboradores[i]=obj;}else ERP.colaboradores.push(obj);
   salvarERP();fm('modal-col');renderColabs();
 }
@@ -1527,7 +1566,7 @@ function renderColabs(){
       const nome=rateios.length?(ERP.clientes.find(x=>x.id===rateios[0].ccId)?.nome||'ADM Geral'):'ADM Geral';
       centroCell=nome;
     }
-    return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span></td><td>${c.func||'—'}</td><td>${fmt(c.sal)}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${centroCell}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;
+    return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span></td><td>${c.func||'—'}</td><td>${fmt(remCol(c))}${remCol(c)>Number(c.sal||0)?`<div style="font-size:10px;color:var(--text3)">base ${fmt(c.sal)} + adic.</div>`:''}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${centroCell}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;
   }).join('');
 }
 function excluirCol(id){if(!confirm('Excluir?'))return;ERP.colaboradores=ERP.colaboradores.filter(x=>x.id!==id);_marcarExcluido('colaboradores',id);salvarERP();renderColabs();}
@@ -1538,7 +1577,7 @@ function abrirModalServico(id){
   else{['msv-id','msv-nome','msv-desc'].forEach(x=>document.getElementById(x).value='');document.getElementById('msv-cat').value='asg';document.getElementById('msv-un').value='mes';document.getElementById('msv-val').value='';document.getElementById('msv-ret').value=0;}
   abrirModal('modal-sv');
 }
-function salvarServico(){const nome=document.getElementById('msv-nome').value.trim();if(!nome){alert('Informe o nome.');return;}const id=document.getElementById('msv-id').value;const obj={id:id||gid(),nome,cat:document.getElementById('msv-cat').value,un:document.getElementById('msv-un').value,valor:Number(document.getElementById('msv-val').value||0),retPerc:Number(document.getElementById('msv-ret').value||0),descNF:document.getElementById('msv-desc').value.trim()};if(id){const i=ERP.servicos.findIndex(x=>x.id===id);ERP.servicos[i]=obj;}else ERP.servicos.push(obj);salvarERP();fm('modal-sv');renderServicos();}
+function salvarServico(){const nome=document.getElementById('msv-nome').value.trim();if(!nome){alert('Informe o nome.');return;}const id=document.getElementById('msv-id').value;const obj={up:Date.now(),id:id||gid(),nome,cat:document.getElementById('msv-cat').value,un:document.getElementById('msv-un').value,valor:Number(document.getElementById('msv-val').value||0),retPerc:Number(document.getElementById('msv-ret').value||0),descNF:document.getElementById('msv-desc').value.trim()};if(id){const i=ERP.servicos.findIndex(x=>x.id===id);ERP.servicos[i]=obj;}else ERP.servicos.push(obj);salvarERP();fm('modal-sv');renderServicos();}
 function renderServicos(){
   const tb=document.getElementById('tb-sv');const cats={asg:'ASG/Limpeza',portaria:'Portaria',zeladoria:'Zeladoria',vigia:'Vigia',cobertura:'Cobertura Férias',feriado:'Feriado',extra:'Extra',outro:'Outro'};const uns={mes:'/mês',dia:'/dia',hora:'/hora',evento:'/evento',fixo:'fixo'};
   if(!ERP.servicos.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:14px">Nenhum serviço.</td></tr>';return;}
@@ -1552,7 +1591,7 @@ function abrirModalCat(id){
   else{['mcat-id','mcat-nome','mcat-sub'].forEach(x=>document.getElementById(x).value='');document.getElementById('mcat-tipo').value='despesa_fixa';}
   abrirModal('modal-cat');
 }
-function salvarCat(){const nome=document.getElementById('mcat-nome').value.trim();if(!nome){alert('Informe o nome.');return;}const id=document.getElementById('mcat-id').value;const obj={id:id||gid(),nome,tipo:document.getElementById('mcat-tipo').value,sub:document.getElementById('mcat-sub').value.trim()};if(id){const i=ERP.categorias.findIndex(x=>x.id===id);ERP.categorias[i]=obj;}else ERP.categorias.push(obj);salvarERP();fm('modal-cat');renderCats();}
+function salvarCat(){const nome=document.getElementById('mcat-nome').value.trim();if(!nome){alert('Informe o nome.');return;}const id=document.getElementById('mcat-id').value;const obj={up:Date.now(),id:id||gid(),nome,tipo:document.getElementById('mcat-tipo').value,sub:document.getElementById('mcat-sub').value.trim()};if(id){const i=ERP.categorias.findIndex(x=>x.id===id);ERP.categorias[i]=obj;}else ERP.categorias.push(obj);salvarERP();fm('modal-cat');renderCats();}
 function renderCats(){
   const tL={receita:'Receita',aporte:'Aporte',investimento:'Investimento',resgate:'Resgate',despesa_fixa:'Fixa',despesa_var:'Variável',pessoal:'Pessoal',imposto:'Imposto',provisao:'Provisão'};
   const rec=ERP.categorias.filter(c=>['receita','aporte','investimento','resgate'].includes(c.tipo));
@@ -1574,8 +1613,8 @@ function abrirModalRecibo(tipo){
 }
 function gerarRecibo(){
   const cfg=ERP.config;let r={};
-  if(tipoRec==='cliente'){const cliId=document.getElementById('mrb-cli').value;const cli=ERP.clientes.find(c=>c.id===cliId);r={id:gid(),tipo:'cliente',num:document.getElementById('mrb-num').value,cliId,cliNome:cli?.nome||'',cliCNPJ:cli?.cnpj||'',val:Number(document.getElementById('mrb-val').value||0),desc:document.getElementById('mrb-desc').value,comp:document.getElementById('mrb-comp').value,data:new Date().toISOString().slice(0,10)};}
-  else{const rpaId=document.getElementById('mrb-rpa').value;const rpa=ERP.colaboradores.find(c=>c.id===rpaId);r={id:gid(),tipo:'rpa',num:document.getElementById('mrb-rpa-num').value,rpaId,rpaNome:rpa?.nome||'',rpaCPF:rpa?.cpf||'',rpaPix:rpa?.pix||'',val:Number(document.getElementById('mrb-rpa-val').value||0),desc:document.getElementById('mrb-rpa-desc').value,comp:document.getElementById('mrb-rpa-comp').value,data:new Date().toISOString().slice(0,10)};}
+  if(tipoRec==='cliente'){const cliId=document.getElementById('mrb-cli').value;const cli=ERP.clientes.find(c=>c.id===cliId);r={up:Date.now(),id:gid(),tipo:'cliente',num:document.getElementById('mrb-num').value,cliId,cliNome:cli?.nome||'',cliCNPJ:cli?.cnpj||'',val:Number(document.getElementById('mrb-val').value||0),desc:document.getElementById('mrb-desc').value,comp:document.getElementById('mrb-comp').value,data:new Date().toISOString().slice(0,10)};}
+  else{const rpaId=document.getElementById('mrb-rpa').value;const rpa=ERP.colaboradores.find(c=>c.id===rpaId);r={up:Date.now(),id:gid(),tipo:'rpa',num:document.getElementById('mrb-rpa-num').value,rpaId,rpaNome:rpa?.nome||'',rpaCPF:rpa?.cpf||'',rpaPix:rpa?.pix||'',val:Number(document.getElementById('mrb-rpa-val').value||0),desc:document.getElementById('mrb-rpa-desc').value,comp:document.getElementById('mrb-rpa-comp').value,data:new Date().toISOString().slice(0,10)};}
   ERP.recibos.push(r);salvarERP();fm('modal-recibo');imprimirRecibo(r);
 }
 function imprimirRecibo(r){
@@ -1638,9 +1677,11 @@ function sincronizarERP(){
       if(temDados()) enviarParaSheets();
     })
     .catch(function(){
-      // Se não conseguiu buscar, pelo menos envia o que tem (com mesclagem
-      // ainda acontecendo dentro de enviarParaSheets)
-      if(temDados()) enviarParaSheets();
+      // Falhou a leitura do Sheets — NÃO envia nada (enviar sem ler primeiro
+      // era justamente o que fazia dados sumirem). Avisa e tenta depois.
+      _pendenteEnvio=true;
+      const st=document.getElementById('sync-status');
+      if(st){st.textContent='\u26a0\ufe0f Não consegui ler o Sheets agora. Nada foi enviado (proteção contra perda). Tente de novo em instantes.';st.style.color='var(--red)';}
     })
     .finally(function(){
       if(btn){btn.textContent='☁️ Sincronizar';btn.disabled=false;}
@@ -1654,8 +1695,24 @@ function sincronizarERP(){
 // aba esquecida aberta sobrescreva a planilha com dados desatualizados.
 setInterval(function(){
   const url=localStorage.getItem('mjl_erp_script_url');
-  if(url&&navigator.onLine)carregarDoSheets();
+  if(url&&navigator.onLine){
+    if(_pendenteEnvio&&temDados())enviarParaSheets();else carregarDoSheets();
+  }
 },5*60*1000);
+// Internet voltou → envia o que ficou pendente
+window.addEventListener('online',function(){
+  if(_pendenteEnvio&&temDados())enviarParaSheets();else carregarDoSheets();
+});
+// Outra aba do ERP salvou algo neste mesmo aparelho → recarrega na hora
+window.addEventListener('storage',function(e){
+  if(e.key==='mjl_erp_v2'&&e.newValue){try{ERP=JSON.parse(e.newValue);atualizarTudo();}catch(_){/*ignora*/}}
+});
+// Voltou para esta aba (celular reabriu o navegador) → busca a versão atual
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&navigator.onLine){
+    if(_pendenteEnvio&&temDados())enviarParaSheets();else carregarDoSheets();
+  }
+});
 // ================================================================
 
 // INIT
@@ -1701,6 +1758,11 @@ if(!ERP.categorias.length){ERP.categorias=[
 ];}
 salvarERP();carregarURLErp();resetFluxo();renderDash();
 
+
+// ===== OFFLINE: service worker guarda o app no aparelho =====
+if('serviceWorker' in navigator && location.protocol==='https:'){
+  navigator.serviceWorker.register('./sw.js').catch(function(){});
+}
 </script>
 </body>
 </html>

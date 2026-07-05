@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v5</title>
+<title>MJL ERP Financeiro v6</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1734,18 +1734,96 @@ const PROP_PADRAO={
   pag:`Os pagamentos deverão ser efetuados até o 3º dia útil do mês subsequente, mediante apresentação de nota fiscal. Em caso de atraso, incidirão multa, juros de mora e correção monetária conforme condições contratuais.`
 };
 let _postosProp=[];
-function renderPostosProp(){
-  document.getElementById('mpr-postos').innerHTML=_postosProp.length?_postosProp.map((p,i)=>`<div class="item-venda" style="flex-wrap:wrap;">
-      <input style="flex:2;min-width:110px;" placeholder="Função (ex: ASG)" value="${p.funcao||''}" oninput="_postosProp[${i}].funcao=this.value">
-      <input style="flex:2;min-width:130px;" placeholder="Escala/horário (ex: 6x1 — 07h às 15h20)" value="${p.escala||''}" oninput="_postosProp[${i}].escala=this.value">
-      <input type="number" style="width:56px;" min="1" placeholder="Qtd" value="${p.qtd||1}" oninput="_postosProp[${i}].qtd=Number(this.value)||1;renderPostosProp()">
-      <input type="number" style="width:110px;" step="0.01" placeholder="Valor unit." value="${p.val||''}" oninput="_postosProp[${i}].val=Number(this.value)||0;renderPostosProp()">
-      <button class="btn btn-danger btn-sm" onclick="_postosProp.splice(${i},1);renderPostosProp()">×</button>
-    </div>`).join(''):'<p style="color:var(--text3);font-size:12px;margin:4px 0 6px;">Adicione os postos: função, escala, quantidade e valor.</p>';
-  const tot=_postosProp.reduce((s,p)=>s+(Number(p.qtd)||1)*(Number(p.val)||0),0);
-  document.getElementById('mpr-total').textContent=_postosProp.length?'Total mensal: '+fmt(tot):'';
+// Percentuais de encargos (modelo da planilha de precificação da Marjorie)
+const ENC_PADRAO={fgts:8,ferias:11.0789,dec:8.33,multaFgts:3.2,jur:5,inss:0};
+function calcCustoPosto(p){
+  const c=p.custo||{};
+  const sal=Number(c.sal||0);
+  const adics=Number(c.he||0)+Number(c.adnot||0)+Number(c.insal||0)+Number(c.peric||0);
+  const base=sal+adics; // encargos incidem sobre salário + adicionais habituais
+  const regime=c.regime||'clt';
+  let enc=0,detEnc=[];
+  if(regime==='rpa'){
+    const pInss=c.inssRpa!=null?Number(c.inssRpa):20;
+    enc=base*pInss/100;detEnc.push(['INSS patronal RPA '+pInss+'%',enc]);
+  }else{ // clt, parcial e cobertura usam os mesmos percentuais mensais
+    const pInss=c.inss!=null?Number(c.inss):ENC_PADRAO.inss;
+    const linhas=[['INSS/RAT '+pInss+'%',base*pInss/100],['FGTS 8%',base*ENC_PADRAO.fgts/100],['Férias+1/3 11,08%',base*ENC_PADRAO.ferias/100],['13º 8,33%',base*ENC_PADRAO.dec/100],['Multa FGTS 3,2%',base*ENC_PADRAO.multaFgts/100],['Jurídico '+(Number(ERP.config.jurPerc||5))+'%',base*Number(ERP.config.jurPerc||5)/100]];
+    linhas.forEach(l=>{if(l[1]>0)detEnc.push(l);enc+=l[1];});
+  }
+  const benef=Number(c.vr||0)+Number(c.vt||0)+Number(c.unif||0)+Number(c.outros||0);
+  const custoTotal=base+enc+benef;
+  return {base,adics,enc,detEnc,benef,custoTotal};
 }
-function addPostoProp(){_postosProp.push({funcao:'',escala:'',qtd:1,val:0});renderPostosProp();}
+function precoSugerido(custo,mkp){
+  // margem desejada sobre o PREÇO, já descontando o DAS por dentro
+  const das=Number(ERP.config.aliq||4.5);
+  const m=Number(mkp||0);
+  const div=1-(das+m)/100;
+  return div>0?custo/div:0;
+}
+function renderPostosProp(){
+  const REG={clt:'CLT Integral',parcial:'CLT Parcial',rpa:'RPA / Autônomo',cobertura:'Cobertura de Férias (30 dias)'};
+  document.getElementById('mpr-postos').innerHTML=_postosProp.length?_postosProp.map((p,i)=>{
+    const c=p.custo||{};const r=calcCustoPosto(p);
+    const mkp=c.mkp!=null?c.mkp:25;
+    const sug=precoSugerido(r.custoTotal,mkp);
+    const das=Number(ERP.config.aliq||4.5);
+    const margem=p.val?(p.val*(1-das/100)-r.custoTotal):0;
+    const margemP=p.val?margem/p.val*100:0;
+    return `<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <input style="flex:2;min-width:100px;" placeholder="Função (ex: ASG)" value="${p.funcao||''}" oninput="_postosProp[${i}].funcao=this.value">
+        <input style="flex:3;min-width:150px;" placeholder="Escala/horário (ex: 2ª, 4ª e 6ª — 07h às 11h)" value="${p.escala||''}" oninput="_postosProp[${i}].escala=this.value">
+        <input type="number" style="width:52px;" min="1" title="Quantidade" value="${p.qtd||1}" oninput="_postosProp[${i}].qtd=Number(this.value)||1;renderPostosProp()">
+        <input type="number" style="width:105px;font-weight:800;" step="0.01" placeholder="Valor final" title="Valor unitário cobrado" value="${p.val||''}" oninput="_postosProp[${i}].val=Number(this.value)||0;renderPostosProp()">
+        <button class="btn btn-ghost btn-sm" onclick="_postosProp[${i}]._ab=!_postosProp[${i}]._ab;renderPostosProp()">${p._ab?'🔼 Fechar custo':'🧮 Custo'}</button>
+        <button class="btn btn-danger btn-sm" onclick="_postosProp.splice(${i},1);renderPostosProp()">×</button>
+      </div>
+      ${p.val&&r.custoTotal?`<div style="font-size:11px;margin-top:6px;font-weight:700;color:${margem>=0?'var(--green)':'var(--red)'};">Custo ${fmt(r.custoTotal)} · DAS ${das}% · Margem líquida: ${fmt(margem)} (${margemP.toFixed(1)}%)</div>`:''}
+      ${p._ab?`<div style="background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;">
+        <div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:8px;">🧮 PLANILHA DE CUSTO DO POSTO</div>
+        <div class="fr"><div class="fg"><label>Regime</label><select onchange="_postosProp[${i}].custo=_postosProp[${i}].custo||{};_postosProp[${i}].custo.regime=this.value;renderPostosProp()">${Object.keys(REG).map(k=>`<option value="${k}" ${(c.regime||'clt')===k?'selected':''}>${REG[k]}</option>`).join('')}</select></div>
+          <div class="fg"><label>Salário bruto do posto (R$)${(c.regime==='parcial')?' — proporcional às horas':''}</label><input type="number" step="0.01" value="${c.sal||''}" oninput="_postosProp[${i}].custo=_postosProp[${i}].custo||{};_postosProp[${i}].custo.sal=Number(this.value)||0;renderPostosProp()"></div></div>
+        <div class="fr3">
+          <div class="fg"><label>Hora Extra (R$/mês)</label><input type="number" step="0.01" value="${c.he||''}" oninput="_postosProp[${i}].custo.he=Number(this.value)||0;renderPostosProp()"></div>
+          <div class="fg"><label>Adic. Noturno (R$)</label><input type="number" step="0.01" value="${c.adnot||''}" oninput="_postosProp[${i}].custo.adnot=Number(this.value)||0;renderPostosProp()"></div>
+          <div class="fg"><label>Insalubridade (R$)</label><input type="number" step="0.01" value="${c.insal||''}" oninput="_postosProp[${i}].custo.insal=Number(this.value)||0;renderPostosProp()"></div>
+        </div>
+        <div class="fr3">
+          <div class="fg"><label>Periculosidade (R$)</label><input type="number" step="0.01" value="${c.peric||''}" oninput="_postosProp[${i}].custo.peric=Number(this.value)||0;renderPostosProp()"></div>
+          <div class="fg"><label>VR/VA (R$/mês)</label><input type="number" step="0.01" value="${c.vr||''}" oninput="_postosProp[${i}].custo.vr=Number(this.value)||0;renderPostosProp()"></div>
+          <div class="fg"><label>VT líquido (R$/mês)</label><input type="number" step="0.01" title="VT do mês menos o desconto de 6% do salário" value="${c.vt||''}" oninput="_postosProp[${i}].custo.vt=Number(this.value)||0;renderPostosProp()"></div>
+        </div>
+        <div class="fr3">
+          <div class="fg"><label>Uniforme/EPI (R$/mês)</label><input type="number" step="0.01" value="${c.unif||''}" oninput="_postosProp[${i}].custo.unif=Number(this.value)||0;renderPostosProp()"></div>
+          <div class="fg"><label>Outros (exames, plano...) R$/mês</label><input type="number" step="0.01" value="${c.outros||''}" oninput="_postosProp[${i}].custo.outros=Number(this.value)||0;renderPostosProp()"></div>
+          <div class="fg"><label>${(c.regime==='rpa')?'INSS patronal RPA (%)':'INSS/RAT (%) — 0 se Anexo IV'}</label><input type="number" step="0.01" value="${(c.regime==='rpa')?(c.inssRpa!=null?c.inssRpa:20):(c.inss!=null?c.inss:0)}" oninput="_postosProp[${i}].custo.${(c.regime==='rpa')?'inssRpa':'inss'}=Number(this.value)||0;renderPostosProp()"></div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:8px 10px;font-size:12px;">
+          ${r.detEnc.map(d=>`<div style="display:flex;justify-content:space-between;color:var(--text2);"><span>${d[0]}</span><span>${fmt(d[1])}</span></div>`).join('')}
+          ${r.benef?`<div style="display:flex;justify-content:space-between;color:var(--text2);"><span>Benefícios (VR+VT+unif.+outros)</span><span>${fmt(r.benef)}</span></div>`:''}
+          <div style="display:flex;justify-content:space-between;font-weight:800;border-top:1.5px solid var(--border);margin-top:4px;padding-top:4px;"><span>CUSTO TOTAL DO POSTO</span><span style="color:var(--red)">${fmt(r.custoTotal)}</span></div>
+        </div>
+        <div style="margin-top:10px;">
+          <label style="font-size:11px;font-weight:800;color:var(--text2);">MARGEM DESEJADA (sobre o preço, DAS ${Number(ERP.config.aliq||4.5)}% já descontado)</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+            ${[15,20,25,30].map(m=>`<button class="btn ${mkp===m?'btn-primary':'btn-ghost'} btn-sm" onclick="_postosProp[${i}].custo.mkp=${m};renderPostosProp()">${m}%</button>`).join('')}
+            <input type="number" style="width:64px;" step="0.5" value="${mkp}" oninput="_postosProp[${i}].custo.mkp=Number(this.value)||0;renderPostosProp()"><span style="font-size:12px;">%</span>
+            <span style="flex:1;text-align:right;font-weight:800;color:var(--brand);">Preço sugerido: ${fmt(sug)}</span>
+            <button class="btn btn-green btn-sm" onclick="_postosProp[${i}].val=Math.round(precoSugerido(calcCustoPosto(_postosProp[${i}]).custoTotal,_postosProp[${i}].custo.mkp!=null?_postosProp[${i}].custo.mkp:25)*100)/100;renderPostosProp()">✔️ Usar</button>
+          </div>
+        </div>
+      </div>`:''}
+    </div>`;
+  }).join(''):'<p style="color:var(--text3);font-size:12px;margin:4px 0 6px;">Adicione os postos e use o 🧮 pra montar o custo e o preço.</p>';
+  const tot=_postosProp.reduce((s,p)=>s+(Number(p.qtd)||1)*(Number(p.val)||0),0);
+  const totC=_postosProp.reduce((s,p)=>s+(Number(p.qtd)||1)*calcCustoPosto(p).custoTotal,0);
+  const das=Number(ERP.config.aliq||4.5);
+  const mgTot=tot?(tot*(1-das/100)-totC):0;
+  document.getElementById('mpr-total').innerHTML=_postosProp.length?('Total mensal: '+fmt(tot)+(totC?`<span style="font-size:11px;color:${mgTot>=0?'var(--green)':'var(--red)'};"> · margem líquida ${fmt(mgTot)} (${tot?(mgTot/tot*100).toFixed(1):0}%)</span>`:'')):'';
+}
+function addPostoProp(){_postosProp.push({funcao:'',escala:'',qtd:1,val:0,custo:{regime:'clt',mkp:25},_ab:true});renderPostosProp();}
 function abrirModalProposta(id){
   const hoje=new Date();const iso=d=>d.toISOString().slice(0,10);
   if(id){
@@ -1765,7 +1843,7 @@ function abrirModalProposta(id){
     document.getElementById('mpr-t-resumo').value=p.tResumo||PROP_PADRAO.resumo;
     document.getElementById('mpr-t-comp').value=p.tComp||PROP_PADRAO.comp;
     document.getElementById('mpr-t-pag').value=p.tPag||PROP_PADRAO.pag;
-    _postosProp=(p.postos||[]).map(x=>({...x}));
+    _postosProp=(p.postos||[]).map(x=>({...x,custo:{...(x.custo||{regime:'clt',mkp:25})}}));
   }else{
     document.getElementById('mpr-titulo').textContent='Nova Proposta';
     document.getElementById('mpr-id').value='';
@@ -1790,7 +1868,7 @@ function salvarProposta(imprimir){
   const id=document.getElementById('mpr-id').value;
   const cli=document.getElementById('mpr-cli').value.trim();
   if(!cli){alert('Informe o cliente/condomínio.');return;}
-  const postos=_postosProp.filter(p=>p.funcao&&Number(p.val)>0).map(p=>({funcao:p.funcao.trim(),escala:(p.escala||'').trim(),qtd:Number(p.qtd)||1,val:Number(p.val)}));
+  const postos=_postosProp.filter(p=>p.funcao&&Number(p.val)>0).map(p=>({funcao:p.funcao.trim(),escala:(p.escala||'').trim(),qtd:Number(p.qtd)||1,val:Number(p.val),custo:p.custo?{...p.custo}:undefined,custoTotal:calcCustoPosto(p).custoTotal}));
   if(!postos.length){alert('Adicione ao menos um posto com função e valor.');return;}
   const ano=new Date().getFullYear();
   let num;
@@ -1822,9 +1900,10 @@ function renderPropostas(){
   f.innerHTML=kpi('Propostas',tot)+kpi('Em aberto',env,'var(--orange)')+kpi('Fechadas',fech,'var(--green)')+kpi('Conversão',conv+'%','var(--brand)');
   const el=document.getElementById('lista-propostas');
   if(!tot){el.innerHTML='<div class="card" style="text-align:center;padding:28px;color:var(--text3);">Nenhuma proposta ainda. Clique em <strong>+ Novo</strong> para criar a primeira — ela sai pronta pra enviar, com a identidade da MJL.</div>';return;}
-  el.innerHTML='<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>Cliente</th><th>Emissão</th><th>Validade</th><th>Total/mês</th><th>Status</th><th>Ações</th></tr></thead><tbody>'+
+  el.innerHTML='<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>Cliente</th><th>Emissão</th><th>Validade</th><th>Total/mês</th><th>Margem</th><th>Status</th><th>Ações</th></tr></thead><tbody>'+
     [...ERP.propostas].sort((a,b)=>(b.up||0)-(a.up||0)).map(p=>{const s=stMap[p.st]||stMap.rascunho;
       return`<tr><td><strong>${p.num}</strong></td><td>${p.cli}</td><td>${p.data?new Date(p.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td>${p.validade?new Date(p.validade+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td><strong>${fmt(p.total)}</strong></td>
+      <td>${(()=>{const tc=(p.postos||[]).reduce((s,x)=>s+(x.qtd||1)*(x.custoTotal||0),0);if(!tc)return '—';const das=Number(ERP.config.aliq||4.5);const mg=p.total*(1-das/100)-tc;return `<span style="font-weight:700;color:${mg>=0?'var(--green)':'var(--red)'}">${fmt(mg)}<div style="font-size:10px;color:var(--text3)">${p.total?(mg/p.total*100).toFixed(1):0}%</div></span>`;})()}</td>
       <td><select onchange="setStatusProp('${p.id}',this.value)" style="padding:4px 6px;border-radius:6px;border:1.5px solid var(--border);font-size:12px;">${Object.keys(stMap).map(k=>`<option value="${k}" ${p.st===k?'selected':''}>${stMap[k][1]}</option>`).join('')}</select></td>
       <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalProposta('${p.id}')">✏️</button><button class="btn btn-primary btn-sm" onclick="imprimirProposta(ERP.propostas.find(x=>x.id==='${p.id}'))">🖨️</button><button class="btn btn-danger btn-sm" onclick="excluirProp('${p.id}')">🗑️</button></td></tr>`;}).join('')+'</tbody></table></div></div>';
 }

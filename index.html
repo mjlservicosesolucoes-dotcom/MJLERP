@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v7</title>
+<title>MJL ERP Financeiro v8</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -138,6 +138,7 @@ tr:hover td{background:#fafbff;}
     <a class="nav-link" data-page="pagar">💸 Contas a Pagar</a>
     <a class="nav-link" data-page="folha">👥 Folha & Encargos</a>
     <a class="nav-link" data-page="impostos">🏛️ Impostos</a>
+    <a class="nav-link" data-page="almox">📦 Almoxarifado</a>
     <div class="menu-sec">Provisões</div>
     <a class="nav-link" data-page="provisoes">🏦 Contas Virtuais</a>
     <a class="nav-link" data-page="prov-colab">📋 Provisão RH</a>
@@ -238,6 +239,22 @@ tr:hover td{background:#fafbff;}
     </div>
 
     <!-- VENDAS AVULSAS -->
+    <div class="page" id="page-almox">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="btn btn-green" onclick="abrirModalEntrada()">⬇️ Entrada (compra)</button>
+        <button class="btn btn-primary" onclick="abrirModalSaida(false)">⬆️ Saída p/ condomínio</button>
+        <button class="btn btn-ghost" onclick="abrirModalSaida(true)">🦺 Entrega de EPI</button>
+        <button class="btn btn-ghost" onclick="abrirFichaEPI()">🖨️ Ficha de EPI</button>
+      </div>
+      <div id="almox-kpis" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+      <h3 style="font-size:14px;margin:4px 0 8px;">Estoque atual</h3>
+      <div id="almox-estoque"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;flex-wrap:wrap;gap:8px;">
+        <h3 style="font-size:14px;margin:0;">Movimentações do mês</h3>
+        <select id="almox-fcli" onchange="renderAlmox()" style="padding:6px 8px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;"><option value="">Todos os destinos</option></select>
+      </div>
+      <div id="almox-movs"></div>
+    </div>
     <div class="page" id="page-propostas">
       <div id="prop-funil" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
       <div id="lista-propostas"></div>
@@ -594,6 +611,60 @@ tr:hover td{background:#fafbff;}
   </div>
 </div></div>
 
+<div id="modal-prod" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3 id="mpd-titulo">Novo Produto</h3><button class="modal-cls" onclick="fm('modal-prod')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mpd-id">
+    <div class="fg"><label>Nome do produto *</label><input id="mpd-nome" placeholder="Ex: Desinfetante Pinho"></div>
+    <div class="fr"><div class="fg"><label>Categoria</label><select id="mpd-cat"><option>Material de limpeza</option><option>EPI</option><option>Uniforme</option><option>Equipamento</option><option>Outros</option></select></div><div class="fg"><label>Estoque mínimo (unid. consumo)</label><input type="number" id="mpd-min" step="0.1" placeholder="Ex: 5"></div></div>
+    <div class="fr3">
+      <div class="fg"><label>Unidade de COMPRA</label><input id="mpd-ucompra" placeholder="Ex: Galão 5L"></div>
+      <div class="fg"><label>Unidade de CONSUMO</label><input id="mpd-ucons" placeholder="Ex: Litro"></div>
+      <div class="fg"><label>Fator (consumo por compra)</label><input type="number" id="mpd-fator" step="0.01" placeholder="Ex: 5"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin:-4px 0 12px;">💡 Ex: compro em <strong>Galão 5L</strong>, uso em <strong>Litro</strong>, fator <strong>5</strong>. Se compra e consumo são iguais (ex: unidade), fator = 1.</div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1" onclick="salvarProduto()">Salvar</button><button class="btn btn-ghost" onclick="fm('modal-prod')">Cancelar</button></div>
+  </div>
+</div></div>
+<div id="modal-ent" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3>⬇️ Entrada — Compra</h3><button class="modal-cls" onclick="fm('modal-ent')">×</button></div>
+  <div class="modal-body">
+    <div class="fg"><label>Produto *</label><select id="men-prod" onchange="menInfo()"></select><div id="men-info" style="font-size:11px;color:var(--text3);margin-top:4px;"></div></div>
+    <div class="fr3">
+      <div class="fg"><label>Qtd (unid. compra)</label><input type="number" id="men-qtd" step="0.01"></div>
+      <div class="fg"><label>Valor TOTAL (R$)</label><input type="number" id="men-val" step="0.01"></div>
+      <div class="fg"><label>Data</label><input type="date" id="men-data"></div>
+    </div>
+    <div class="fg"><label>Fornecedor (opcional)</label><input id="men-forn"></div>
+    <div class="fr"><div class="fg"><label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="men-pagar" checked style="width:auto;"> Gerar Conta a Pagar</label></div><div class="fg"><label>Vencimento</label><input type="date" id="men-venc"></div></div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-green" style="flex:1" onclick="salvarEntrada()">Registrar entrada</button><button class="btn btn-ghost" onclick="fm('modal-ent')">Cancelar</button></div>
+  </div>
+</div></div>
+<div id="modal-sai" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3 id="msa-titulo">⬆️ Saída / Requisição</h3><button class="modal-cls" onclick="fm('modal-sai')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="msa-epi">
+    <div class="fg"><label>Produto *</label><select id="msa-prod" onchange="msaInfo()"></select><div id="msa-saldo" style="font-size:11px;color:var(--text3);margin-top:4px;"></div></div>
+    <div class="fr3">
+      <div class="fg"><label>Qtd (unid. consumo)</label><input type="number" id="msa-qtd" step="0.01"></div>
+      <div class="fg"><label>Destino</label><select id="msa-cc"><option value="">⚙️ ADM / Escritório</option></select></div>
+      <div class="fg"><label>Data</label><input type="date" id="msa-data"></div>
+    </div>
+    <div id="msa-epi-box" style="display:none;background:var(--bg);border-radius:8px;padding:10px;margin-bottom:12px;">
+      <div class="fr"><div class="fg"><label>Colaborador (recebedor) *</label><select id="msa-colab"></select></div><div class="fg"><label>C.A. do EPI</label><input id="msa-ca" placeholder="Ex: 12345"></div></div>
+      <div style="font-size:11px;color:var(--text3);">📋 A entrega entra na Ficha de EPI do colaborador (NR-6) — imprima e colha a assinatura.</div>
+    </div>
+    <div class="fg"><label>Observação</label><input id="msa-obs"></div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1" onclick="salvarSaida()">Registrar saída</button><button class="btn btn-ghost" onclick="fm('modal-sai')">Cancelar</button></div>
+  </div>
+</div></div>
+<div id="modal-fepi" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3>🖨️ Ficha de EPI</h3><button class="modal-cls" onclick="fm('modal-fepi')">×</button></div>
+  <div class="modal-body">
+    <div class="fg"><label>Colaborador</label><select id="mfe-colab"></select></div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1" onclick="imprimirFichaEPI()">🖨️ Imprimir ficha</button><button class="btn btn-ghost" onclick="fm('modal-fepi')">Cancelar</button></div>
+  </div>
+</div></div>
 <div id="modal-prop" class="modal-overlay hidden"><div class="modal" style="max-width:720px;">
   <div class="modal-hdr"><h3 id="mpr-titulo">Nova Proposta</h3><button class="modal-cls" onclick="fm('modal-prop')">×</button></div>
   <div class="modal-body">
@@ -879,8 +950,8 @@ function vencStatus(dt,st){
   if(d<=5)return{cls:'tr-breve',badge:`<span class="alerta-v breve">⏰ ${d}d</span>`};
   return{cls:'',badge:''};
 }
-const TITLES={dashboard:'Dashboard',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',receber:'Contas a Receber',vendas:'Vendas / Avulsos',propostas:'Propostas Comerciais',pagar:'Contas a Pagar',folha:'Folha & Encargos',impostos:'Impostos',provisoes:'Contas Virtuais','prov-colab':'Provisão RH',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',servicos:'Serviços',categorias:'Categorias',recibos:'Recibos',config:'Configurações'};
-const NOVO_FNS={clientes:()=>abrirModalCliente(),colaboradores:()=>abrirModalColab(),servicos:()=>abrirModalServico(),categorias:()=>abrirModalCat(),receber:()=>abrirModalReceber(),pagar:()=>abrirModalPagar(),impostos:()=>abrirModalImposto(),provisoes:()=>abrirModalConta(),vendas:()=>abrirModalVenda(),propostas:()=>abrirModalProposta()};
+const TITLES={dashboard:'Dashboard',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',receber:'Contas a Receber',vendas:'Vendas / Avulsos',propostas:'Propostas Comerciais',pagar:'Contas a Pagar',folha:'Folha & Encargos',impostos:'Impostos',almox:'Almoxarifado & EPI',provisoes:'Contas Virtuais','prov-colab':'Provisão RH',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',servicos:'Serviços',categorias:'Categorias',recibos:'Recibos',config:'Configurações'};
+const NOVO_FNS={clientes:()=>abrirModalCliente(),colaboradores:()=>abrirModalColab(),servicos:()=>abrirModalServico(),categorias:()=>abrirModalCat(),receber:()=>abrirModalReceber(),pagar:()=>abrirModalPagar(),impostos:()=>abrirModalImposto(),almox:()=>abrirModalProduto(),provisoes:()=>abrirModalConta(),vendas:()=>abrirModalVenda(),propostas:()=>abrirModalProposta()};
 function navegar(p){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav-link').forEach(x=>x.classList.remove('active'));
@@ -890,7 +961,7 @@ function navegar(p){
   const btn=document.getElementById('btn-novo');
   btn.style.display=NOVO_FNS[p]?'':'none';
   if(NOVO_FNS[p])btn.onclick=NOVO_FNS[p];
-  const R={dashboard:renderDash,dre:renderDRE,fluxo:renderFluxo,centrocusto:renderCC,receber:renderReceber,vendas:renderVendas,propostas:renderPropostas,pagar:renderPagar,folha:renderFolha,impostos:renderImpostos,provisoes:renderContas,'prov-colab':renderProvRH,clientes:renderClientes,colaboradores:renderColabs,servicos:renderServicos,categorias:renderCats,recibos:renderRecibos,config:carregarConfig};
+  const R={dashboard:renderDash,dre:renderDRE,fluxo:renderFluxo,centrocusto:renderCC,receber:renderReceber,vendas:renderVendas,propostas:renderPropostas,pagar:renderPagar,folha:renderFolha,impostos:renderImpostos,almox:renderAlmox,provisoes:renderContas,'prov-colab':renderProvRH,clientes:renderClientes,colaboradores:renderColabs,servicos:renderServicos,categorias:renderCats,recibos:renderRecibos,config:carregarConfig};
   if(R[p])R[p]();
 }
 document.querySelectorAll('[data-page]').forEach(a=>a.addEventListener('click',()=>navegar(a.dataset.page)));
@@ -1059,6 +1130,7 @@ function _rateiosDoPagar(p){
 function _detalheRateioPagarPorCliente(cliId,mes){
   const linhas=[];
   ERP.pagar.filter(p=>p.venc?.slice(0,7)===mes).forEach(p=>{
+    if(p.estoque)return; // compra de estoque: o custo entra no CC pela SAÍDA de cada condomínio (evita contar 2x)
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc,pct:Number(r.pct),val:valor*Number(r.pct)/100});
@@ -1082,7 +1154,11 @@ function renderCC(){
     });
     const rateioLinhas=_detalheRateioPorCliente(cli.id);
     const maoObra=rateioLinhas.reduce((s,r)=>s+r.val,0);
-    const custos=totalPag+imp.reduce((s,i)=>s+Number(i.val||0),0)+maoObra;
+    // Material do Almoxarifado consumido por este cliente no mês
+    const matLinhas=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes&&m.ccId===cli.id)
+      .map(m=>({desc:(m.epi?'EPI: ':'Material: ')+m.prodNome+' ('+m.qtd+' '+(m.uni||'')+')',val:Number(m.custoTotal||0)}));
+    const matTot=matLinhas.reduce((s,m)=>s+m.val,0);
+    const custos=totalPag+imp.reduce((s,i)=>s+Number(i.val||0),0)+maoObra+matTot;
     const das=receita*Number(ERP.config.aliq||4.5)/100;
     const margem=receita-ret-das-custos;const perc=receita>0?margem/receita*100:0;
     html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow);">
@@ -1094,6 +1170,7 @@ function renderCC(){
         ${rateioLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span>(${fmt(r.val)})</span></div>`).join('')}
         ${pagLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span>(${fmt(p.val)})</span></div>`).join('')}
         ${imp.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${i.tipo}: ${i.desc||''}${i.pct<100?` <span class="badge b-purple">${i.pct}% rateio</span>`:''}</span><span>(${fmt(i.val)})</span></div>`).join('')}
+        ${matLinhas.map(m=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) 📦 ${m.desc}</span><span>(${fmt(m.val)})</span></div>`).join('')}
         <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Margem</span><strong style="color:${margem>=0?'var(--green)':'var(--red)'}">${fmt(margem)} (${fmtP(perc)})</strong></div>
       </div>
     </div>`;
@@ -1106,8 +1183,10 @@ function renderCC(){
     });
   });
   const rateioAdmLinhas=_detalheRateioPorCliente('');
-  const totAdm=pagAdmLinhas.reduce((s,p)=>s+p.val,0)+impAdm.reduce((s,i)=>s+Number(i.val||0),0)+rateioAdmLinhas.reduce((s,r)=>s+r.val,0);
-  if(totAdm>0)html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;"><div style="background:#5a6a7a;color:#fff;padding:12px 16px;"><strong>⚙️ ADM Geral</strong></div><div style="padding:12px 16px;">${rateioAdmLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span style="color:var(--red)">${fmt(r.val)}</span></div>`).join('')}${pagAdmLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}${impAdm.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc||p.tipo||''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Total ADM</span><strong style="color:var(--red)">${fmt(totAdm)}</strong></div></div></div>`;
+  const matAdmLinhas=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes&&!m.ccId)
+    .map(m=>({desc:(m.epi?'EPI: ':'Material: ')+m.prodNome+' ('+m.qtd+' '+(m.uni||'')+')',val:Number(m.custoTotal||0)}));
+  const totAdm=pagAdmLinhas.reduce((s,p)=>s+p.val,0)+impAdm.reduce((s,i)=>s+Number(i.val||0),0)+rateioAdmLinhas.reduce((s,r)=>s+r.val,0)+matAdmLinhas.reduce((s,m)=>s+m.val,0);
+  if(totAdm>0)html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;"><div style="background:#5a6a7a;color:#fff;padding:12px 16px;"><strong>⚙️ ADM Geral</strong></div><div style="padding:12px 16px;">${rateioAdmLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span style="color:var(--red)">${fmt(r.val)}</span></div>`).join('')}${pagAdmLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}${impAdm.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc||p.tipo||''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}${matAdmLinhas.map(m=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>📦 ${m.desc}</span><span style="color:var(--red)">${fmt(m.val)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Total ADM</span><strong style="color:var(--red)">${fmt(totAdm)}</strong></div></div></div>`;
   el.innerHTML=html||'<div class="info-box blue">Cadastre clientes para ver o centro de custo.</div>';
 }
 
@@ -1721,6 +1800,209 @@ function abrirModalRecibo(tipo){
   const num=String(ERP.recibos.length+1).padStart(4,'0');const comp=getMes();
   document.getElementById(tipo==='cliente'?'mrb-num':'mrb-rpa-num').value=num;document.getElementById(tipo==='cliente'?'mrb-comp':'mrb-rpa-comp').value=comp;
   abrirModal('modal-recibo');
+}
+
+
+// ===== ALMOXARIFADO & EPI =====
+function recalcProduto(prodId){
+  const p=ERP.produtos.find(x=>x.id===prodId);if(!p)return;
+  let saldo=0,custoMedio=0;
+  [...ERP.estoqueMov].filter(m=>m.prodId===prodId).sort((a,b)=>(a.data||'').localeCompare(b.data||'')||(a.up||0)-(b.up||0)).forEach(m=>{
+    if(m.tipo==='entrada'){
+      const qc=Number(m.qtdCons||0);const vt=Number(m.valTotal||0);
+      const base=Math.max(saldo,0);
+      custoMedio=(base*custoMedio+vt)/((base+qc)||1);
+      saldo+=qc;
+    }else{
+      saldo-=Number(m.qtdCons||0);
+    }
+  });
+  p.saldo=Math.round(saldo*100)/100;p.custoMedio=Math.round(custoMedio*10000)/10000;p.up=Date.now();
+}
+function abrirModalProduto(id){
+  if(id){
+    const p=ERP.produtos.find(x=>x.id===id);if(!p)return;
+    document.getElementById('mpd-titulo').textContent='Editar Produto';
+    document.getElementById('mpd-id').value=p.id;
+    document.getElementById('mpd-nome').value=p.nome||'';document.getElementById('mpd-cat').value=p.cat||'Material de limpeza';
+    document.getElementById('mpd-min').value=p.min||'';document.getElementById('mpd-ucompra').value=p.uniCompra||'';
+    document.getElementById('mpd-ucons').value=p.uniCons||'';document.getElementById('mpd-fator').value=p.fator||1;
+  }else{
+    document.getElementById('mpd-titulo').textContent='Novo Produto';
+    ['mpd-id','mpd-nome','mpd-min','mpd-ucompra','mpd-ucons','mpd-fator'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('mpd-cat').value='Material de limpeza';
+  }
+  abrirModal('modal-prod');
+}
+function salvarProduto(){
+  const id=document.getElementById('mpd-id').value;
+  const nome=document.getElementById('mpd-nome').value.trim();
+  if(!nome){alert('Informe o nome do produto.');return;}
+  const obj={up:Date.now(),id:id||gid(),nome,cat:document.getElementById('mpd-cat').value,
+    min:Number(document.getElementById('mpd-min').value||0),
+    uniCompra:document.getElementById('mpd-ucompra').value.trim()||'Unidade',
+    uniCons:document.getElementById('mpd-ucons').value.trim()||'Unidade',
+    fator:Number(document.getElementById('mpd-fator').value||1)||1,
+    saldo:0,custoMedio:0};
+  if(id){const i=ERP.produtos.findIndex(x=>x.id===id);obj.saldo=ERP.produtos[i].saldo;obj.custoMedio=ERP.produtos[i].custoMedio;ERP.produtos[i]=obj;}
+  else ERP.produtos.push(obj);
+  salvarERP();fm('modal-prod');renderAlmox();
+}
+function excluirProduto(id){
+  if(!confirm('Excluir este produto? As movimentações dele também saem do estoque.'))return;
+  ERP.produtos=ERP.produtos.filter(x=>x.id!==id);_marcarExcluido('produtos',id);
+  ERP.estoqueMov.filter(m=>m.prodId===id).forEach(m=>_marcarExcluido('estoqueMov',m.id));
+  ERP.estoqueMov=ERP.estoqueMov.filter(m=>m.prodId!==id);
+  salvarERP();renderAlmox();
+}
+function _popProdSel(selId){
+  const sel=document.getElementById(selId);
+  sel.innerHTML='<option value="">Selecione...</option>'+ERP.produtos.map(p=>`<option value="${p.id}">${p.nome} (${p.cat})</option>`).join('');
+}
+function menInfo(){
+  const p=ERP.produtos.find(x=>x.id===document.getElementById('men-prod').value);
+  document.getElementById('men-info').textContent=p?`Compra em ${p.uniCompra} → ${p.fator} ${p.uniCons}(s) cada. Saldo atual: ${p.saldo||0} ${p.uniCons}(s).`:'';
+}
+function msaInfo(){
+  const p=ERP.produtos.find(x=>x.id===document.getElementById('msa-prod').value);
+  document.getElementById('msa-saldo').textContent=p?`Saldo: ${p.saldo||0} ${p.uniCons}(s) · Custo médio: ${fmt(p.custoMedio||0)}/${p.uniCons}`:'';
+}
+function abrirModalEntrada(){
+  if(!ERP.produtos.length){alert('Cadastre um produto primeiro (+ Novo).');return;}
+  _popProdSel('men-prod');
+  const hoje=new Date().toISOString().slice(0,10);
+  document.getElementById('men-qtd').value='';document.getElementById('men-val').value='';
+  document.getElementById('men-data').value=hoje;document.getElementById('men-venc').value=hoje;
+  document.getElementById('men-forn').value='';document.getElementById('men-pagar').checked=true;
+  document.getElementById('men-info').textContent='';
+  abrirModal('modal-ent');
+}
+function salvarEntrada(){
+  const p=ERP.produtos.find(x=>x.id===document.getElementById('men-prod').value);
+  if(!p){alert('Selecione o produto.');return;}
+  const qtd=Number(document.getElementById('men-qtd').value||0);
+  const val=Number(document.getElementById('men-val').value||0);
+  if(qtd<=0||val<=0){alert('Informe quantidade e valor da compra.');return;}
+  const data=document.getElementById('men-data').value||new Date().toISOString().slice(0,10);
+  const forn=document.getElementById('men-forn').value.trim();
+  const qtdCons=qtd*(p.fator||1);
+  ERP.estoqueMov.push({up:Date.now(),id:gid(),tipo:'entrada',prodId:p.id,prodNome:p.nome,data,qtd,uni:p.uniCompra,qtdCons,valTotal:val,forn});
+  recalcProduto(p.id);
+  if(document.getElementById('men-pagar').checked){
+    ERP.pagar.push({up:Date.now(),id:gid(),desc:`Compra: ${p.nome} — ${qtd} ${p.uniCompra}${forn?' ('+forn+')':''}`,catNome:'Materiais / Insumos',val,venc:document.getElementById('men-venc').value||data,ccId:'',st:'pendente',estoque:true});
+  }
+  salvarERP();fm('modal-ent');renderAlmox();
+  alert('✅ Entrada registrada: +'+qtdCons+' '+p.uniCons+'(s). Custo médio atual: '+fmt(p.custoMedio)+'/'+p.uniCons+'.');
+}
+function abrirModalSaida(epi){
+  if(!ERP.produtos.length){alert('Cadastre um produto primeiro (+ Novo).');return;}
+  _popProdSel('msa-prod');
+  document.getElementById('msa-epi').value=epi?'1':'';
+  document.getElementById('msa-titulo').textContent=epi?'🦺 Entrega de EPI':'⬆️ Saída / Requisição';
+  document.getElementById('msa-epi-box').style.display=epi?'block':'none';
+  document.getElementById('msa-cc').innerHTML='<option value="">⚙️ ADM / Escritório</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  if(epi)document.getElementById('msa-colab').innerHTML='<option value="">Selecione...</option>'+ERP.colaboradores.filter(c=>c.ativo!==false).map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  document.getElementById('msa-qtd').value='';document.getElementById('msa-obs').value='';document.getElementById('msa-ca').value='';
+  document.getElementById('msa-data').value=new Date().toISOString().slice(0,10);
+  document.getElementById('msa-saldo').textContent='';
+  abrirModal('modal-sai');
+}
+function salvarSaida(){
+  const p=ERP.produtos.find(x=>x.id===document.getElementById('msa-prod').value);
+  if(!p){alert('Selecione o produto.');return;}
+  const qtd=Number(document.getElementById('msa-qtd').value||0);
+  if(qtd<=0){alert('Informe a quantidade.');return;}
+  if(qtd>(p.saldo||0)&&!confirm('⚠️ Saldo em estoque ('+(p.saldo||0)+' '+p.uniCons+') é menor que a saída. Registrar mesmo assim?'))return;
+  const epi=document.getElementById('msa-epi').value==='1';
+  let colabId='',colabNome='';
+  if(epi){
+    colabId=document.getElementById('msa-colab').value;
+    if(!colabId){alert('Selecione o colaborador que recebeu o EPI.');return;}
+    colabNome=ERP.colaboradores.find(c=>c.id===colabId)?.nome||'';
+  }
+  const ccId=document.getElementById('msa-cc').value;
+  const ccNome=ccId?(ERP.clientes.find(c=>c.id===ccId)?.nome||''):'ADM';
+  const data=document.getElementById('msa-data').value||new Date().toISOString().slice(0,10);
+  const custoTotal=Math.round(qtd*(p.custoMedio||0)*100)/100;
+  ERP.estoqueMov.push({up:Date.now(),id:gid(),tipo:'saida',prodId:p.id,prodNome:p.nome,data,qtd,uni:p.uniCons,qtdCons:qtd,custoUnit:p.custoMedio||0,custoTotal,ccId,ccNome,epi,colabId,colabNome,ca:document.getElementById('msa-ca').value.trim(),obs:document.getElementById('msa-obs').value.trim()});
+  recalcProduto(p.id);
+  salvarERP();fm('modal-sai');renderAlmox();
+}
+function excluirMov(id){
+  if(!confirm('Excluir esta movimentação? O estoque será recalculado.'))return;
+  const m=ERP.estoqueMov.find(x=>x.id===id);
+  ERP.estoqueMov=ERP.estoqueMov.filter(x=>x.id!==id);_marcarExcluido('estoqueMov',id);
+  if(m)recalcProduto(m.prodId);
+  salvarERP();renderAlmox();
+}
+function abrirFichaEPI(){
+  document.getElementById('mfe-colab').innerHTML='<option value="">Selecione...</option>'+ERP.colaboradores.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  abrirModal('modal-fepi');
+}
+function imprimirFichaEPI(){
+  const colId=document.getElementById('mfe-colab').value;
+  const col=ERP.colaboradores.find(c=>c.id===colId);
+  if(!col){alert('Selecione o colaborador.');return;}
+  const entregas=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&m.epi&&m.colabId===colId).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Ficha de EPI — ${col.nome}</title><style>
+    body{font-family:Arial,sans-serif;font-size:12px;color:#222;padding:14mm;}
+    h1{font-size:18px;color:#1a4f7a;}h2{font-size:13px;margin:14px 0 6px;}
+    table{width:100%;border-collapse:collapse;margin-top:6px;}
+    th,td{border:1px solid #999;padding:7px 8px;font-size:11px;text-align:left;}
+    th{background:#eaf2f9;}
+    .box{border:1px solid #ccc;border-radius:6px;padding:10px;margin-top:8px;}
+    .ass{margin-top:22mm;display:flex;gap:14mm;}
+    .ass div{flex:1;border-top:1.2px solid #444;padding-top:4px;text-align:center;font-size:11px;}
+    .peq{font-size:10px;color:#555;}
+  </style></head><body>
+    <h1>FICHA DE CONTROLE DE ENTREGA DE EPI</h1>
+    <div class="peq">MJL Serviços e Soluções LTDA — CNPJ 46.636.732/0001-73 — Conforme NR-6 (Portaria MTE)</div>
+    <div class="box">
+      <strong>Colaborador:</strong> ${col.nome} &nbsp;&nbsp; <strong>Função:</strong> ${col.func||'—'} &nbsp;&nbsp; <strong>CPF:</strong> ${col.cpf||'—'}
+    </div>
+    <h2>Termo de Responsabilidade</h2>
+    <p style="font-size:11px;text-align:justify;">Declaro ter recebido gratuitamente os EPIs abaixo relacionados, bem como orientação e treinamento quanto ao seu uso correto. Comprometo-me a: usá-los apenas para a finalidade a que se destinam; responsabilizar-me pela guarda e conservação; comunicar qualquer alteração que os torne impróprios para uso; e devolvê-los quando solicitado ou no desligamento. Estou ciente de que o não uso do EPI constitui ato faltoso (NR-6 e art. 158 da CLT).</p>
+    <h2>Entregas registradas</h2>
+    <table><thead><tr><th>Data</th><th>EPI / Item</th><th>C.A.</th><th>Qtd</th><th>Assinatura do colaborador</th></tr></thead><tbody>
+      ${entregas.length?entregas.map(e=>`<tr><td>${e.data?new Date(e.data+'T12:00').toLocaleDateString('pt-BR'):''}</td><td>${e.prodNome}</td><td>${e.ca||'—'}</td><td>${e.qtd} ${e.uni||''}</td><td style="height:26px;"></td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:#777;">Nenhuma entrega registrada ainda</td></tr>'}
+      ${Array(Math.max(0,6-entregas.length)).fill('<tr><td style="height:26px;"></td><td></td><td></td><td></td><td></td></tr>').join('')}
+    </tbody></table>
+    <div class="ass"><div>${col.nome}<br><span class="peq">Colaborador</span></div><div>MJL Serviços e Soluções LTDA<br><span class="peq">Empregador</span></div></div>
+  <script>window.onload=function(){window.print();};</scr`+`ipt></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+  fm('modal-fepi');
+}
+function renderAlmox(){
+  const kpi=(l,v,cor)=>`<div style="flex:1;min-width:110px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow);"><div style="font-size:11px;color:var(--text3);font-weight:700;">${l}</div><div style="font-size:20px;font-weight:800;color:${cor||'var(--text)'};">${v}</div></div>`;
+  const mes=getMes();
+  const valorEstoque=ERP.produtos.reduce((s,p)=>s+Math.max(p.saldo||0,0)*(p.custoMedio||0),0);
+  const alertas=ERP.produtos.filter(p=>(p.min||0)>0&&(p.saldo||0)<=(p.min||0)).length;
+  const consumoMes=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes).reduce((s,m)=>s+Number(m.custoTotal||0),0);
+  document.getElementById('almox-kpis').innerHTML=kpi('Produtos',ERP.produtos.length)+kpi('Valor em estoque',fmt(valorEstoque),'var(--brand)')+kpi('Repor ⚠️',alertas,alertas?'var(--red)':'var(--green)')+kpi('Consumo no mês',fmt(consumoMes),'var(--orange)');
+  // Estoque
+  document.getElementById('almox-estoque').innerHTML=ERP.produtos.length?'<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Produto</th><th>Categoria</th><th>Saldo</th><th>Mínimo</th><th>Custo médio</th><th>Valor em estoque</th><th>Ações</th></tr></thead><tbody>'+
+    [...ERP.produtos].sort((a,b)=>a.nome.localeCompare(b.nome)).map(p=>{
+      const alerta=(p.min||0)>0&&(p.saldo||0)<=(p.min||0);
+      return`<tr><td><strong>${p.nome}</strong><div style="font-size:10px;color:var(--text3)">${p.uniCompra} → ${p.fator} ${p.uniCons}(s)</div></td><td>${p.cat}</td>
+      <td><strong style="color:${alerta?'var(--red)':(p.saldo<0?'var(--red)':'var(--text)')}">${p.saldo||0} ${p.uniCons}(s)</strong>${alerta?' <span class="badge b-red">repor</span>':''}</td>
+      <td>${p.min||'—'}</td><td>${fmt(p.custoMedio||0)}/${p.uniCons}</td><td>${fmt(Math.max(p.saldo||0,0)*(p.custoMedio||0))}</td>
+      <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalProduto('${p.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirProduto('${p.id}')">🗑️</button></td></tr>`;}).join('')+'</tbody></table></div></div>':'<div class="card" style="text-align:center;padding:24px;color:var(--text3);">Cadastre os produtos que você compra (materiais, EPIs, uniformes) em <strong>+ Novo</strong>.</div>';
+  // Filtro de destino
+  const fsel=document.getElementById('almox-fcli');const fval=fsel.value;
+  fsel.innerHTML='<option value="">Todos os destinos</option><option value="__adm">⚙️ ADM</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  fsel.value=fval;
+  // Movimentações do mês
+  let movs=ERP.estoqueMov.filter(m=>(m.data||'').slice(0,7)===mes);
+  if(fval==='__adm')movs=movs.filter(m=>m.tipo==='saida'&&!m.ccId);
+  else if(fval)movs=movs.filter(m=>m.ccId===fval);
+  document.getElementById('almox-movs').innerHTML=movs.length?'<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Produto</th><th>Qtd</th><th>Destino / Origem</th><th>Valor</th><th></th></tr></thead><tbody>'+
+    [...movs].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||(b.up||0)-(a.up||0)).map(m=>`<tr>
+      <td>${m.data?new Date(m.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
+      <td><span class="badge ${m.tipo==='entrada'?'b-green':(m.epi?'b-orange':'b-blue')}">${m.tipo==='entrada'?'⬇️ Entrada':(m.epi?'🦺 EPI':'⬆️ Saída')}</span></td>
+      <td>${m.prodNome}</td><td>${m.qtd} ${m.uni||''}</td>
+      <td>${m.tipo==='entrada'?(m.forn||'Compra'):(m.epi?(m.colabNome||'')+' · ':'')+(m.ccNome||'ADM')}</td>
+      <td>${m.tipo==='entrada'?fmt(m.valTotal||0):fmt(m.custoTotal||0)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="excluirMov('${m.id}')">🗑️</button></td></tr>`).join('')+'</tbody></table></div></div>':'<div class="card" style="text-align:center;padding:18px;color:var(--text3);">Nenhuma movimentação neste mês.</div>';
 }
 
 // ===== PROPOSTAS COMERCIAIS =====

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v6</title>
+<title>MJL ERP Financeiro v7</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1726,7 +1726,7 @@ function abrirModalRecibo(tipo){
 // ===== PROPOSTAS COMERCIAIS =====
 const PROP_PADRAO={
   sobre:`A MJL Serviços e Soluções é a sua parceira estratégica para transformar a gestão de serviços de limpeza e conservação. Com um compromisso inabalável com a qualidade, eficiência e confiabilidade, oferecemos soluções completas em terceirização que garantem um ambiente impecável, higienizado e acolhedor.\n\nNossa proposta vai além da simples prestação de serviços: ela engloba um planejamento meticuloso e uma execução impecável, liberando sua administração para focar no que realmente importa — o bem-estar e a valorização do seu patrimônio.`,
-  porque:`Equipe Especializada: profissionais rigorosamente selecionados, treinados e capacitados para as demandas específicas do seu condomínio.\nGestão Descomplicada: cuidamos de toda a burocracia, encargos e substituições, assegurando a continuidade e a qualidade dos serviços.\nOtimização de Custos: valores transparentes e competitivos, que incluem todas as despesas necessárias para uma operação sem surpresas.\nSupervisão Constante: acompanhamento técnico-administrativo e avaliações frequentes para garantir a excelência e a melhoria contínua.\nGestão Digital: ponto eletrônico com foto e GPS, cronograma de tarefas com registro fotográfico e canal direto de chamados — transparência total da operação.`,
+  porque:`Equipe Especializada: profissionais rigorosamente selecionados, com treinamentos frequentes e capacitação contínua para as demandas específicas do seu condomínio.\nSupervisão Presente: visitas semanais programadas da supervisão para maior controle da operação, com avaliações registradas e plano de melhoria contínua.\nGestão Digital: controle de ponto eletrônico com foto e GPS e acompanhamento de cronograma por meios digitais, com registro fotográfico das tarefas — maior assertividade e transparência total da operação.\nConformidade Legal: operação em conformidade com as Normas Regulamentadoras vigentes em 2026, incluindo a NR-1 (Gerenciamento de Riscos Ocupacionais) e a divulgação de Campanhas de Saúde conforme a Lei nº 15.377/2026.\nCuidado com Pessoas: seguro de vida para os colaboradores, EPIs e uniformes completos — equipe protegida e valorizada entrega mais qualidade.\nGestão Descomplicada: cuidamos de toda a burocracia, encargos e substituições (em até 48h), assegurando a continuidade dos serviços.\nOtimização de Custos: valores transparentes e competitivos, que incluem todas as despesas necessárias para uma operação sem surpresas.`,
   respcli:`Disponibilizar condições seguras e adequadas para a prestação dos serviços, incluindo local para armazenamento de materiais, água e energia elétrica.\nFornecer local apropriado para alimentação dos colaboradores da MJL.\nComunicar assuntos pertinentes ao serviço diretamente ao encarregado/supervisor responsável pelo contrato.`,
   respmjl:`Garantir serviço e atendimento de alta qualidade e eficiência, com avaliações contínuas e aprimoramento.\nCumprir integralmente todas as obrigações sociais e trabalhistas (CLT), incluindo transporte, alimentação e EPIs.\nRealizar avaliações frequentes dos serviços, implementando ações de melhoria contínua.\nAcompanhamento e gerenciamento completo de toda a operação, com supervisão externa periódica.\nManter reserva técnica de funcionários para cobertura rápida em caso de faltas, assegurando a continuidade dos serviços.\nSubstituir, em até 48 horas, qualquer colaborador mediante solicitação por escrito do contratante.`,
   resumo:`Vigência: 12 (doze) meses, com renovação automática por igual período, salvo manifestação por escrito com 30 dias de antecedência.\nReajuste: anual, pelo índice integral da Convenção Coletiva da categoria (data-base março), aplicado no mês seguinte à homologação; novos benefícios da categoria são repassados ao valor contratado.\nPagamento: até o 3º dia útil do mês, mediante apresentação da nota fiscal.\nEncargos: todos os encargos sociais, trabalhistas e previdenciários são de responsabilidade exclusiva da MJL; guias comprobatórias entregues mensalmente junto à nota fiscal.\nRescisão: por qualquer das partes, mediante aviso prévio por escrito de 30 dias.\nNão-aliciamento: vedada a contratação direta de colaboradores da MJL durante o contrato e por 180 dias após o término.`,
@@ -1920,15 +1920,15 @@ function imprimirProposta(p){
   const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${p.num} — ${p.cli}</title><style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#2b2b2b;font-size:13px;line-height:1.55;}
-    .pg{width:210mm;min-height:290mm;padding:18mm 16mm;page-break-after:always;position:relative;}
+    .pg{width:210mm;min-height:290mm;padding:14mm 15mm 20mm;page-break-after:always;position:relative;}
     .pg:last-child{page-break-after:auto;}
     h1{font-size:34px;font-weight:800;color:#111;}
     .sub{font-size:30px;font-weight:800;color:#9fcdf0;}
     .risco{color:#9fcdf0;font-weight:800;letter-spacing:2px;}
-    h2{font-size:26px;font-weight:800;color:#111;margin-bottom:2px;}
+    h2{font-size:23px;font-weight:800;color:#111;margin-bottom:2px;}
     h3{font-size:15px;font-weight:800;margin:14px 0 6px;}
     p{margin-bottom:8px;}
-    ul{margin:6px 0 10px 18px;}li{margin-bottom:6px;}
+    ul{margin:6px 0 10px 18px;}li{margin-bottom:4px;}
     .capa-band{position:absolute;left:0;top:70mm;bottom:12mm;width:120mm;background:#bfe0f8;border-radius:0 6px 6px 0;}
     .capa-card{position:absolute;left:14mm;top:96mm;width:96mm;background:#fff;border-radius:22px;padding:16mm 12mm;}
     .capa-card .lbl{font-size:11px;color:#777;margin-top:10px;}
@@ -1970,24 +1970,18 @@ function imprimirProposta(p){
     <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
   </div>`:''}
 
-  ${B.resp!==false?`<div class="pg">
-    <h2>Descrição do Projeto</h2><div class="sub" style="font-size:26px;">Especificações</div>
+  <div class="pg">
+    ${B.resp!==false?`<h2>Descrição do Projeto</h2><div class="sub" style="font-size:22px;">Especificações</div>
     <div class="risco">//////</div>
     <h3>Projeto — ${p.cli}</h3>
-    <p>Propomos a terceirização com equipe dedicada e qualificada, garantindo limpeza, organização e conservação contínua, com supervisão da MJL e gestão digital da operação (ponto eletrônico com foto e GPS, cronograma de tarefas com registro fotográfico e canal de chamados).</p>
-    <div class="duascol" style="margin-top:8px;">
+    <p>Propomos a terceirização com equipe dedicada e qualificada, garantindo limpeza, organização e conservação contínua, com supervisão semanal da MJL, treinamentos frequentes e gestão digital da operação (ponto eletrônico com foto e GPS, cronograma com registro fotográfico e canal de chamados).</p>
+    <div class="duascol" style="margin-top:6px;">
       <div><h3>Responsabilidades do Condomínio</h3><ul>${bullets(p.tRespCli)}</ul></div>
       <div><h3>Responsabilidades da MJL</h3><ul>${bullets(p.tRespMjl)}</ul></div>
     </div>
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
-  </div>`:''}
-
-  <div class="pg">
-    <h2>Orçamento</h2><div class="sub" style="font-size:26px;">Detalhado</div>
-    <div class="risco">//////</div>
+    <div style="border-top:3px solid #bfe0f8;margin:10px 0 12px;"></div>`:`<h2>Orçamento</h2><div class="sub" style="font-size:22px;">Detalhado</div><div class="risco">//////</div>`}
     <h3>Planejamento Técnico e Operacional</h3>
-    <p>A MJL Serviços e Soluções selecionará uma equipe qualificada e capacitada para as atividades. O planejamento será adaptado às necessidades específicas do ${p.cli}.</p>
-    <p>${matTxt}</p>
+    <p>A MJL Serviços e Soluções selecionará uma equipe qualificada e capacitada para as atividades. O planejamento será adaptado às necessidades específicas do ${p.cli}. ${matTxt}</p>
     <h3>Investimento Mensal</h3>
     <table><thead><tr><th>Função</th><th>Escala / Horário</th><th style="text-align:center;">Qtd</th><th style="text-align:right;">Valor Unitário</th><th style="text-align:right;">Total</th></tr></thead><tbody>
       ${p.postos.map(x=>`<tr><td><strong>${x.funcao}</strong></td><td>${x.escala||'—'}</td><td style="text-align:center;">${x.qtd}</td><td style="text-align:right;">${fmt(x.val)}</td><td style="text-align:right;"><strong>${fmt(x.qtd*x.val)}</strong></td></tr>`).join('')}

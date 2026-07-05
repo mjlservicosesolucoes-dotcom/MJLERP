@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v8</title>
+<title>MJL ERP Financeiro v9</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -130,6 +130,7 @@ tr:hover td{background:#fafbff;}
     <a class="nav-link" data-page="dre">📈 DRE Gerencial</a>
     <a class="nav-link" data-page="fluxo">💧 Fluxo de Caixa</a>
     <a class="nav-link" data-page="centrocusto">🎯 Centro de Custo</a>
+    <a class="nav-link" data-page="relatorios">📊 Relatórios</a>
     <div class="menu-sec">Vendas & Receitas</div>
     <a class="nav-link" data-page="receber">💰 Contas a Receber</a>
     <a class="nav-link" data-page="vendas">🛒 Vendas / Avulsos</a>
@@ -206,6 +207,10 @@ tr:hover td{background:#fafbff;}
     </div>
 
     <!-- CENTRO DE CUSTO -->
+    <div class="page" id="page-relatorios">
+      <div class="info-box blue" style="margin-bottom:12px;">🖨️ Relatórios oficiais com papel timbrado da MJL — imprima ou salve em PDF pelo navegador. O período usa o filtro de mês no topo da tela.</div>
+      <div id="rel-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;"></div>
+    </div>
     <div class="page" id="page-centrocusto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <strong style="font-size:15px;color:var(--brand)">Centro de Custo</strong>
@@ -950,7 +955,7 @@ function vencStatus(dt,st){
   if(d<=5)return{cls:'tr-breve',badge:`<span class="alerta-v breve">⏰ ${d}d</span>`};
   return{cls:'',badge:''};
 }
-const TITLES={dashboard:'Dashboard',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',receber:'Contas a Receber',vendas:'Vendas / Avulsos',propostas:'Propostas Comerciais',pagar:'Contas a Pagar',folha:'Folha & Encargos',impostos:'Impostos',almox:'Almoxarifado & EPI',provisoes:'Contas Virtuais','prov-colab':'Provisão RH',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',servicos:'Serviços',categorias:'Categorias',recibos:'Recibos',config:'Configurações'};
+const TITLES={dashboard:'Dashboard',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',relatorios:'Central de Relatórios',receber:'Contas a Receber',vendas:'Vendas / Avulsos',propostas:'Propostas Comerciais',pagar:'Contas a Pagar',folha:'Folha & Encargos',impostos:'Impostos',almox:'Almoxarifado & EPI',provisoes:'Contas Virtuais','prov-colab':'Provisão RH',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',servicos:'Serviços',categorias:'Categorias',recibos:'Recibos',config:'Configurações'};
 const NOVO_FNS={clientes:()=>abrirModalCliente(),colaboradores:()=>abrirModalColab(),servicos:()=>abrirModalServico(),categorias:()=>abrirModalCat(),receber:()=>abrirModalReceber(),pagar:()=>abrirModalPagar(),impostos:()=>abrirModalImposto(),almox:()=>abrirModalProduto(),provisoes:()=>abrirModalConta(),vendas:()=>abrirModalVenda(),propostas:()=>abrirModalProposta()};
 function navegar(p){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
@@ -961,7 +966,7 @@ function navegar(p){
   const btn=document.getElementById('btn-novo');
   btn.style.display=NOVO_FNS[p]?'':'none';
   if(NOVO_FNS[p])btn.onclick=NOVO_FNS[p];
-  const R={dashboard:renderDash,dre:renderDRE,fluxo:renderFluxo,centrocusto:renderCC,receber:renderReceber,vendas:renderVendas,propostas:renderPropostas,pagar:renderPagar,folha:renderFolha,impostos:renderImpostos,almox:renderAlmox,provisoes:renderContas,'prov-colab':renderProvRH,clientes:renderClientes,colaboradores:renderColabs,servicos:renderServicos,categorias:renderCats,recibos:renderRecibos,config:carregarConfig};
+  const R={dashboard:renderDash,dre:renderDRE,fluxo:renderFluxo,centrocusto:renderCC,relatorios:renderRelatorios,receber:renderReceber,vendas:renderVendas,propostas:renderPropostas,pagar:renderPagar,folha:renderFolha,impostos:renderImpostos,almox:renderAlmox,provisoes:renderContas,'prov-colab':renderProvRH,clientes:renderClientes,colaboradores:renderColabs,servicos:renderServicos,categorias:renderCats,recibos:renderRecibos,config:carregarConfig};
   if(R[p])R[p]();
 }
 document.querySelectorAll('[data-page]').forEach(a=>a.addEventListener('click',()=>navegar(a.dataset.page)));
@@ -1802,6 +1807,159 @@ function abrirModalRecibo(tipo){
   abrirModal('modal-recibo');
 }
 
+
+
+// ===== CENTRAL DE RELATÓRIOS =====
+function _mesLabel(mes){const [a,m]=mes.split('-');return MESES[Number(m)-1]+' de '+a;}
+function _abrirRelatorio(titulo,corpo,periodo){
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${titulo}</title><style>
+    *{box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#222;padding:12mm 14mm;}
+    .cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a4f7a;padding-bottom:8px;margin-bottom:14px;}
+    .cab h1{font-size:19px;color:#1a4f7a;margin:0;}
+    .cab .emp{font-size:15px;font-weight:800;}
+    .peq{font-size:10px;color:#555;}
+    h2{font-size:14px;color:#1a4f7a;margin:16px 0 6px;border-left:4px solid #bfe0f8;padding-left:8px;}
+    table{width:100%;border-collapse:collapse;margin:6px 0;}
+    th{background:#eaf2f9;text-align:left;padding:7px 9px;font-size:11px;border-bottom:2px solid #1a4f7a;}
+    td{padding:7px 9px;border-bottom:1px solid #e5e9ee;font-size:11.5px;}
+    .dir{text-align:right;}.neg{color:#c0392b;}.pos{color:#1e7e4a;}
+    .tot td{font-weight:800;background:#f4f9fe;border-top:2px solid #1a4f7a;}
+    .rodape{margin-top:16px;border-top:1px solid #ccc;padding-top:5px;font-size:9px;color:#777;display:flex;justify-content:space-between;}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  </style></head><body>
+    <div class="cab">
+      <div><div class="emp">MJL Serviços e Soluções LTDA</div><div class="peq">CNPJ 46.636.732/0001-73 · Rio de Janeiro/RJ · (21) 96838-1313 · mjlservicosesolucoes@gmail.com</div></div>
+      <div style="text-align:right;"><h1>${titulo}</h1><div class="peq">${periodo||''}</div></div>
+    </div>
+    ${corpo}
+    <div class="rodape"><span>Documento gerencial gerado pelo MJL ERP</span><span>Emitido em ${new Date().toLocaleString('pt-BR')}</span></div>
+  <script>window.onload=function(){window.print();};</scr`+`ipt></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+}
+function _linha(desc,val,neg,forte){return `<tr${forte?' class="tot"':''}><td>${desc}</td><td class="dir ${neg?'neg':val>=0?'':'neg'}">${neg?'('+fmt(Math.abs(val))+')':fmt(val)}</td></tr>`;}
+
+function relDRE(){
+  const mes=getMes();
+  const recFat=ERP.receber.filter(r=>(r.comp===mes||r.venc?.slice(0,7)===mes)).reduce((s,r)=>s+Number(r.val||0),0);
+  const vendas=ERP.vendas.filter(v=>(v.data||'').slice(0,7)===mes).reduce((s,v)=>s+Number(v.val||0),0);
+  const receita=recFat+vendas;
+  const ret=ERP.impostos.filter(i=>i.comp===mes&&i.ret==='sim').reduce((s,i)=>s+Number(i.val||0),0);
+  const das=receita*Number(ERP.config.aliq||4.5)/100;
+  const impostos=ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').reduce((s,i)=>s+Number(i.val||0),0);
+  const despesas=ERP.pagar.filter(p=>p.venc?.slice(0,7)===mes&&!p.estoque).reduce((s,p)=>s+Number(p.val||0),0);
+  const material=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes).reduce((s,m)=>s+Number(m.custoTotal||0),0);
+  const provisoes=ERP.colaboradores.filter(c=>c.ativo!==false&&c.tipo==='CLT').reduce((s,c)=>s+Number(c.provMes||0),0);
+  const resultado=receita-ret-das-despesas-impostos-material;
+  const corpo=`<h2>Demonstração do Resultado — Regime de Competência</h2>
+  <table><tbody>
+    ${_linha('RECEITA BRUTA (contratos + avulsos)',receita)}
+    ${ret?_linha('(−) Retenções na fonte',ret,true):''}
+    ${_linha('(−) DAS Simples Nacional ('+(ERP.config.aliq||4.5)+'%)',das,true)}
+    ${_linha('(−) Despesas e folha do mês',despesas,true)}
+    ${_linha('(−) Impostos e encargos lançados',impostos,true)}
+    ${material?_linha('(−) Material consumido (almoxarifado)',material,true):''}
+    ${_linha('RESULTADO DO MÊS',resultado,false,true)}
+  </tbody></table>
+  <p class="peq">Margem sobre a receita: <strong>${receita?(resultado/receita*100).toFixed(1):0}%</strong>${provisoes?` · Provisões RH do mês (já dentro da folha quando lançadas): ${fmt(provisoes)}`:''}</p>`;
+  _abrirRelatorio('DRE Gerencial',corpo,_mesLabel(mes));
+}
+function relCCResumo(){
+  const mes=getMes();
+  let linhas='',tR=0,tC=0,tM=0;
+  ERP.clientes.forEach(cli=>{
+    const receita=ERP.receber.filter(r=>r.cliId===cli.id&&(r.comp===mes||r.venc?.slice(0,7)===mes)).reduce((s,r)=>s+Number(r.val||0),0);
+    const maoObra=_detalheRateioPorCliente(cli.id).reduce((s,r)=>s+r.val,0);
+    const pag=_detalheRateioPagarPorCliente(cli.id,mes).reduce((s,p)=>s+p.val,0);
+    let imp=0;ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').forEach(i=>{_rateiosDoImposto(i).forEach(r=>{if(r.ccId===cli.id)imp+=Number(i.val||0)*Number(r.pct||0)/100;});});
+    const mat=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes&&m.ccId===cli.id).reduce((s,m)=>s+Number(m.custoTotal||0),0);
+    const das=receita*Number(ERP.config.aliq||4.5)/100;
+    const custos=maoObra+pag+imp+mat;
+    const margem=receita-das-custos;
+    if(receita||custos){tR+=receita;tC+=custos+das;tM+=margem;
+      linhas+=`<tr><td><strong>${cli.nome}</strong></td><td class="dir">${fmt(receita)}</td><td class="dir neg">(${fmt(das)})</td><td class="dir neg">(${fmt(maoObra)})</td><td class="dir neg">(${fmt(pag+imp)})</td><td class="dir neg">(${fmt(mat)})</td><td class="dir ${margem>=0?'pos':'neg'}"><strong>${fmt(margem)}</strong></td><td class="dir">${receita?(margem/receita*100).toFixed(1):0}%</td></tr>`;}
+  });
+  const corpo=`<h2>Rentabilidade por Contrato</h2>
+  <table><thead><tr><th>Cliente</th><th class="dir">Receita</th><th class="dir">DAS</th><th class="dir">Mão de obra</th><th class="dir">Despesas+Imp.</th><th class="dir">Material</th><th class="dir">Margem</th><th class="dir">%</th></tr></thead>
+  <tbody>${linhas||'<tr><td colspan="8" style="text-align:center;color:#777;">Sem movimentação no período</td></tr>'}
+  <tr class="tot"><td>TOTAL</td><td class="dir">${fmt(tR)}</td><td colspan="4"></td><td class="dir ${tM>=0?'pos':'neg'}">${fmt(tM)}</td><td class="dir">${tR?(tM/tR*100).toFixed(1):0}%</td></tr></tbody></table>
+  <p class="peq">Custos rateados conforme configuração de cada colaborador, despesa e imposto. Material pelo custo médio do almoxarifado.</p>`;
+  _abrirRelatorio('Rentabilidade por Contrato',corpo,_mesLabel(mes));
+}
+function relAging(){
+  const hoje=new Date();const hIso=hoje.toISOString().slice(0,10);
+  const abertos=ERP.receber.filter(r=>r.st!=='recebido'&&r.venc);
+  const faixa=r=>{const d=Math.floor((hoje-new Date(r.venc+'T12:00'))/(24*3600*1000));return d<=0?'aVencer':d<=30?'f30':d<=60?'f60':d<=90?'f90':'f90p';};
+  const porCli={};
+  abertos.forEach(r=>{const n=ERP.clientes.find(c=>c.id===r.cliId)?.nome||r.cliNome||'—';
+    if(!porCli[n])porCli[n]={aVencer:0,f30:0,f60:0,f90:0,f90p:0,tot:0};
+    const f=faixa(r);porCli[n][f]+=Number(r.val||0);if(f!=='aVencer')porCli[n].tot+=Number(r.val||0);});
+  const tots={aVencer:0,f30:0,f60:0,f90:0,f90p:0,tot:0};
+  const linhas=Object.entries(porCli).sort((a,b)=>b[1].tot-a[1].tot).map(([n,v])=>{
+    Object.keys(tots).forEach(k=>tots[k]+=v[k]);
+    return `<tr><td><strong>${n}</strong></td><td class="dir">${fmt(v.aVencer)}</td><td class="dir">${v.f30?fmt(v.f30):'—'}</td><td class="dir">${v.f60?fmt(v.f60):'—'}</td><td class="dir neg">${v.f90?fmt(v.f90):'—'}</td><td class="dir neg">${v.f90p?fmt(v.f90p):'—'}</td><td class="dir"><strong class="${v.tot?'neg':''}">${fmt(v.tot)}</strong></td></tr>`;}).join('');
+  const corpo=`<h2>Aging de Recebíveis — posição em ${hoje.toLocaleDateString('pt-BR')}</h2>
+  <table><thead><tr><th>Cliente</th><th class="dir">A vencer</th><th class="dir">1–30 dias</th><th class="dir">31–60</th><th class="dir">61–90</th><th class="dir">+90 dias</th><th class="dir">Total vencido</th></tr></thead>
+  <tbody>${linhas||'<tr><td colspan="7" style="text-align:center;color:#777;">🎉 Nenhum título em aberto</td></tr>'}
+  <tr class="tot"><td>TOTAL</td><td class="dir">${fmt(tots.aVencer)}</td><td class="dir">${fmt(tots.f30)}</td><td class="dir">${fmt(tots.f60)}</td><td class="dir">${fmt(tots.f90)}</td><td class="dir">${fmt(tots.f90p)}</td><td class="dir neg">${fmt(tots.tot)}</td></tr></tbody></table>
+  <p class="peq">Faixas contadas a partir do vencimento. Clientes recorrentes acima de 60 dias merecem renegociação formal (e atenção na renovação do contrato).</p>`;
+  _abrirRelatorio('Aging de Recebíveis',corpo,'Títulos em aberto');
+}
+function relEvolucao(){
+  const hoje=new Date();let linhas='';let t={fat:0,rec:0,desp:0};
+  for(let i=11;i>=0;i--){
+    const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
+    const m=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const fat=ERP.receber.filter(r=>(r.comp===m||r.venc?.slice(0,7)===m)).reduce((s,r)=>s+Number(r.val||0),0)+ERP.vendas.filter(v=>(v.data||'').slice(0,7)===m).reduce((s,v)=>s+Number(v.val||0),0);
+    const rec=ERP.receber.filter(r=>r.st==='recebido'&&(r.drec||r.venc||'').slice(0,7)===m).reduce((s,r)=>s+Number(r.val||0),0);
+    const desp=ERP.pagar.filter(p=>p.venc?.slice(0,7)===m&&!p.estoque).reduce((s,p)=>s+Number(p.val||0),0)+ERP.impostos.filter(x=>x.comp===m&&x.ret!=='sim').reduce((s,x)=>s+Number(x.val||0),0);
+    t.fat+=fat;t.rec+=rec;t.desp+=desp;
+    const res=fat-fat*Number(ERP.config.aliq||4.5)/100-desp;
+    linhas+=`<tr><td>${MESES[d.getMonth()]} ${d.getFullYear()}</td><td class="dir">${fmt(fat)}</td><td class="dir">${fmt(rec)}</td><td class="dir neg">(${fmt(desp)})</td><td class="dir ${res>=0?'pos':'neg'}"><strong>${fmt(res)}</strong></td></tr>`;
+  }
+  // Ranking por cliente (últimos 12 meses)
+  const desde=new Date(hoje.getFullYear(),hoje.getMonth()-11,1).toISOString().slice(0,7);
+  const rank={};
+  ERP.receber.filter(r=>(r.comp||r.venc||'').slice(0,7)>=desde).forEach(r=>{const n=ERP.clientes.find(c=>c.id===r.cliId)?.nome||r.cliNome||'—';rank[n]=(rank[n]||0)+Number(r.val||0);});
+  const totRank=Object.values(rank).reduce((s,v)=>s+v,0);
+  const rankHtml=Object.entries(rank).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`<tr><td>${n}</td><td class="dir">${fmt(v)}</td><td class="dir">${totRank?(v/totRank*100).toFixed(1):0}%</td></tr>`).join('');
+  const corpo=`<h2>Evolução — Últimos 12 meses</h2>
+  <table><thead><tr><th>Mês</th><th class="dir">Faturado</th><th class="dir">Recebido</th><th class="dir">Despesas</th><th class="dir">Resultado estimado</th></tr></thead>
+  <tbody>${linhas}<tr class="tot"><td>TOTAL 12 MESES</td><td class="dir">${fmt(t.fat)}</td><td class="dir">${fmt(t.rec)}</td><td class="dir neg">(${fmt(t.desp)})</td><td></td></tr></tbody></table>
+  <h2>Participação por Cliente (12 meses)</h2>
+  <table><thead><tr><th>Cliente</th><th class="dir">Faturamento</th><th class="dir">% da receita</th></tr></thead><tbody>${rankHtml||'<tr><td colspan="3" style="text-align:center;color:#777;">Sem dados</td></tr>'}</tbody></table>
+  <p class="peq">⚠️ Concentração: cliente acima de 30% da receita é risco relevante — se ele sair, o caixa sente. Ideal pulverizar.</p>`;
+  _abrirRelatorio('Evolução 12 Meses & Carteira','<div>'+corpo+'</div>','Últimos 12 meses');
+}
+function relFolhaProv(){
+  const mes=getMes();
+  let linhas='',t={rem:0,fgts:0,prov:0,custo:0};
+  ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
+    const rem=remCol(c);const fgts=c.tipo==='CLT'?rem*0.08:0;const prov=c.tipo==='CLT'?Number(c.provMes||0):0;
+    const custo=Number(c.custoTotal||rem);
+    t.rem+=rem;t.fgts+=fgts;t.prov+=prov;t.custo+=custo;
+    linhas+=`<tr><td><strong>${c.nome}</strong></td><td>${c.tipo}</td><td>${c.func||'—'}</td><td class="dir">${fmt(rem)}</td><td class="dir">${fgts?fmt(fgts):'—'}</td><td class="dir">${prov?fmt(prov):'—'}</td><td class="dir"><strong>${fmt(custo)}</strong></td></tr>`;
+  });
+  const corpo=`<h2>Folha, Encargos e Provisões</h2>
+  <table><thead><tr><th>Colaborador</th><th>Vínculo</th><th>Função</th><th class="dir">Remuneração</th><th class="dir">FGTS</th><th class="dir">Provisões/mês</th><th class="dir">Custo total</th></tr></thead>
+  <tbody>${linhas||'<tr><td colspan="7" style="text-align:center;color:#777;">Nenhum colaborador ativo</td></tr>'}
+  <tr class="tot"><td colspan="3">TOTAL</td><td class="dir">${fmt(t.rem)}</td><td class="dir">${fmt(t.fgts)}</td><td class="dir">${fmt(t.prov)}</td><td class="dir">${fmt(t.custo)}</td></tr></tbody></table>
+  <p class="peq">Remuneração = salário-base + adicionais habituais. Provisões: férias+1/3, 13º, rescisão e contingência jurídica. Documento gerencial — não substitui a folha contábil.</p>`;
+  _abrirRelatorio('Folha & Provisões',corpo,_mesLabel(mes));
+}
+function renderRelatorios(){
+  const card=(emoji,titulo,desc,fn)=>`<div class="card" style="cursor:pointer;" onclick="${fn}()">
+    <div style="font-size:26px;">${emoji}</div>
+    <div style="font-weight:800;margin:6px 0 4px;">${titulo}</div>
+    <div style="font-size:12px;color:var(--text3);">${desc}</div>
+    <div style="margin-top:10px;"><span class="btn btn-primary btn-sm">🖨️ Gerar</span></div>
+  </div>`;
+  document.getElementById('rel-cards').innerHTML=
+    card('📈','DRE Gerencial','Receita, DAS, despesas e resultado do mês selecionado.','relDRE')+
+    card('🎯','Rentabilidade por Contrato','Margem de cada cliente: receita − DAS − mão de obra − despesas − material.','relCCResumo')+
+    card('⏰','Aging de Recebíveis','Títulos em aberto por faixa de atraso (a vencer, 30, 60, 90, +90) por cliente.','relAging')+
+    card('📊','Evolução 12 Meses','Faturado × recebido × despesas mês a mês + participação de cada cliente na receita.','relEvolucao')+
+    card('👥','Folha & Provisões','Remuneração, FGTS, provisões e custo total de cada colaborador ativo.','relFolhaProv');
+}
 
 // ===== ALMOXARIFADO & EPI =====
 function recalcProduto(prodId){

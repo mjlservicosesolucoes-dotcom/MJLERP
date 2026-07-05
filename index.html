@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v3</title>
+<title>MJL ERP Financeiro v5</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -133,6 +133,7 @@ tr:hover td{background:#fafbff;}
     <div class="menu-sec">Vendas & Receitas</div>
     <a class="nav-link" data-page="receber">💰 Contas a Receber</a>
     <a class="nav-link" data-page="vendas">🛒 Vendas / Avulsos</a>
+    <a class="nav-link" data-page="propostas">📄 Propostas</a>
     <div class="menu-sec">Custos & Despesas</div>
     <a class="nav-link" data-page="pagar">💸 Contas a Pagar</a>
     <a class="nav-link" data-page="folha">👥 Folha & Encargos</a>
@@ -237,6 +238,10 @@ tr:hover td{background:#fafbff;}
     </div>
 
     <!-- VENDAS AVULSAS -->
+    <div class="page" id="page-propostas">
+      <div id="prop-funil" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+      <div id="lista-propostas"></div>
+    </div>
     <div class="page" id="page-vendas">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <strong style="font-size:15px;color:var(--brand)">Vendas / Serviços Avulsos</strong>
@@ -414,7 +419,7 @@ tr:hover td{background:#fafbff;}
         <div class="fr"><div class="fg"><label>Razão Social</label><input id="cfg-nome" value="MJL Servicos e Solucoes"></div><div class="fg"><label>CNPJ</label><input id="cfg-cnpj" value="46.636.732/0001-73"></div></div>
         <div class="fr"><div class="fg"><label>Telefone</label><input id="cfg-tel" value="(21) 96838-1313"></div><div class="fg"><label>E-mail</label><input id="cfg-email" value="mjlservicosesolucoes@gmail.com"></div></div>
         <div class="fr"><div class="fg"><label>Endereço</label><input id="cfg-end"></div><div class="fg"><label>Regime Tributário</label><select id="cfg-regime"><option value="simples">Simples Nacional</option><option value="lp">Lucro Presumido</option></select></div></div>
-        <div class="fr"><div class="fg"><label>Alíquota Simples (%)</label><input type="number" id="cfg-aliq" value="6" step="0.01"></div><div class="fg"><label>Dia vencimento DAS</label><input type="number" id="cfg-das" value="20"></div></div>
+        <div class="fr"><div class="fg"><label>Alíquota Simples (%)</label><input type="number" id="cfg-aliq" value="4.5" step="0.01"></div><div class="fg"><label>Dia vencimento DAS</label><input type="number" id="cfg-das" value="20"></div></div>
         <div class="fr"><div class="fg"><label>% Jurídico/Rescisão (provisão)</label><input type="number" id="cfg-jur" value="5" step="0.01"></div><div class="fg"><label>Férias+1/3 mensal</label><input value="11,11% do salário" readonly style="background:var(--bg);"></div></div>
         <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configurações</button>
       </div>
@@ -589,6 +594,45 @@ tr:hover td{background:#fafbff;}
   </div>
 </div></div>
 
+<div id="modal-prop" class="modal-overlay hidden"><div class="modal" style="max-width:720px;">
+  <div class="modal-hdr"><h3 id="mpr-titulo">Nova Proposta</h3><button class="modal-cls" onclick="fm('modal-prop')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mpr-id">
+    <div class="fr"><div class="fg"><label>A/C (nome do contato) *</label><input id="mpr-ac" placeholder="Ex: Sr. Tomás / Sra. Danielle"></div><div class="fg"><label>Cliente / Condomínio *</label><input id="mpr-cli" placeholder="Ex: Condomínio Edifício Samira"></div></div>
+    <div class="fg"><label>Endereço</label><input id="mpr-end" placeholder="Av ... , nº — Bairro"></div>
+    <div class="fr"><div class="fg"><label>Data de emissão</label><input type="date" id="mpr-data"></div><div class="fg"><label>Validade</label><input type="date" id="mpr-val"></div></div>
+    <div class="fg" style="background:var(--bg);border-radius:10px;padding:10px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;color:var(--text2);">POSTOS / EQUIPE PROPOSTA</label>
+        <button class="btn btn-ghost btn-sm" onclick="addPostoProp()">+ Posto</button>
+      </div>
+      <div id="mpr-postos"></div>
+      <div id="mpr-total" style="font-size:13px;font-weight:800;margin-top:6px;text-align:right;color:var(--brand);"></div>
+    </div>
+    <div class="fr"><div class="fg"><label>Materiais de limpeza fornecidos por</label><select id="mpr-mat"><option value="mjl">MJL (inclusos no valor)</option><option value="cli">Condomínio / Cliente</option></select></div><div class="fg"><label>Status</label><select id="mpr-st"><option value="rascunho">Rascunho</option><option value="enviada">Enviada</option><option value="negociacao">Em negociação</option><option value="fechada">Fechada ✅</option><option value="perdida">Perdida</option></select></div></div>
+    <div class="fg" style="background:var(--bg);border-radius:10px;padding:10px;margin-bottom:12px;">
+      <label style="font-size:11px;font-weight:700;color:var(--text2);">BLOCOS DA PROPOSTA (liga/desliga por cliente)</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;font-size:13px;">
+        <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-sobre" checked> 🏢 Sobre a empresa</label>
+        <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-resp" checked> 📋 Responsabilidades</label>
+        <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-resumo" checked> 📑 Resumo contratual</label>
+        <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-comp"> 💰 Composição de custos aberta</label>
+      </div>
+    </div>
+    <details style="margin-bottom:12px;"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text2);">✏️ Editar textos da proposta (opcional — já vêm prontos)</summary>
+      <div style="margin-top:10px;">
+        <div class="fg"><label>Quem Somos</label><textarea id="mpr-t-sobre" style="min-height:70px;"></textarea></div>
+        <div class="fg"><label>Porque escolher a MJL (um diferencial por linha)</label><textarea id="mpr-t-porque" style="min-height:70px;"></textarea></div>
+        <div class="fg"><label>Responsabilidades do Condomínio (uma por linha)</label><textarea id="mpr-t-respcli" style="min-height:60px;"></textarea></div>
+        <div class="fg"><label>Responsabilidades da MJL (uma por linha)</label><textarea id="mpr-t-respmjl" style="min-height:60px;"></textarea></div>
+        <div class="fg"><label>Resumo das condições contratuais (uma por linha)</label><textarea id="mpr-t-resumo" style="min-height:90px;"></textarea></div>
+        <div class="fg"><label>Composição de custos (aparece só se o bloco estiver ligado)</label><textarea id="mpr-t-comp" style="min-height:70px;"></textarea></div>
+        <div class="fg"><label>Condições de pagamento</label><textarea id="mpr-t-pag" style="min-height:50px;"></textarea></div>
+      </div>
+    </details>
+    <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1" onclick="salvarProposta(false)">Salvar</button><button class="btn btn-green" style="flex:1" onclick="salvarProposta(true)">💾 Salvar e 🖨️ Gerar</button><button class="btn btn-ghost" onclick="fm('modal-prop')">Cancelar</button></div>
+  </div>
+</div></div>
 <div id="modal-imp" class="modal-overlay hidden"><div class="modal">
   <div class="modal-hdr"><h3>Lançar Imposto</h3><button class="modal-cls" onclick="fm('modal-imp')">×</button></div>
   <div class="modal-body">
@@ -596,7 +640,19 @@ tr:hover td{background:#fafbff;}
     <div class="fr"><div class="fg"><label>Tipo *</label><select id="mimp-tipo"><option>DAS</option><option>INSS</option><option>FGTS</option><option>ISS</option><option>IRRF</option><option>IRPJ</option><option>Outro</option></select></div><div class="fg"><label>Competência</label><input type="month" id="mimp-comp"></div></div>
     <div class="fg"><label>Descrição</label><input id="mimp-desc" placeholder="Ex: FGTS — Breno — Jun/2026"></div>
     <div class="fr"><div class="fg"><label>Valor (R$) *</label><input type="number" id="mimp-val" step="0.01"></div><div class="fg"><label>Vencimento</label><input type="date" id="mimp-venc"></div></div>
-    <div class="fr"><div class="fg"><label>Tomador / Centro de Custo</label><select id="mimp-cc"><option value="">ADM Geral</option></select></div><div class="fg"><label>É retenção recebida?</label><select id="mimp-ret"><option value="nao">Não — imposto a pagar</option><option value="sim">Sim — retenção (abate DAS)</option></select></div></div>
+    <div class="fg" style="background:var(--bg);border-radius:10px;padding:10px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+        <label style="font-size:11px;font-weight:700;color:var(--text2);">CENTRO DE CUSTO (RATEIO POR %)</label>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="ratearImpPorFaturamento()">⚖️ Ratear pelo faturamento</button>
+          <button class="btn btn-ghost btn-sm" onclick="addRateioImp()">+ Cliente</button>
+        </div>
+      </div>
+      <div id="mimp-rateio-lista"></div>
+      <div id="mimp-rateio-total" style="font-size:11px;font-weight:700;margin-top:6px;text-align:right;"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">💡 Sem linhas = ADM Geral. Para o <strong>DAS</strong>, use "⚖️ Ratear pelo faturamento": divide o imposto na proporção exata do que cada cliente faturou na competência — o Centro de Custo mostra o imposto real de cada condomínio.</div>
+    </div>
+    <div class="fr"><div class="fg"><label>É retenção recebida?</label><select id="mimp-ret"><option value="nao">Não — imposto a pagar</option><option value="sim">Sim — retenção (abate DAS)</option></select></div><div class="fg"></div></div>
     <div class="fr"><div class="fg"><label>Status</label><select id="mimp-st"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="atraso">Em Atraso</option></select></div><div class="fg"><label>Data Pagamento</label><input type="date" id="mimp-dpag"></div></div>
     <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1" onclick="salvarImposto()">Salvar</button><button class="btn btn-ghost" onclick="fm('modal-imp')">Cancelar</button></div>
   </div>
@@ -675,8 +731,8 @@ tr:hover td{background:#fafbff;}
 
 <script>
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:6,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[]};
-const CATS_SYNC=['clientes','colaboradores','servicos','categorias','receber','pagar','impostos','vendas','contas','movimentos','recibos'];
+let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:4.5,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[],propostas:[],produtos:[],estoqueMov:[]};
+const CATS_SYNC=['clientes','colaboradores','servicos','categorias','receber','pagar','impostos','vendas','contas','movimentos','recibos','propostas','produtos','estoqueMov'];
 let _syncDebounceTimer=null;
 var _pendenteEnvio=false;
 function salvarERP(){
@@ -823,8 +879,8 @@ function vencStatus(dt,st){
   if(d<=5)return{cls:'tr-breve',badge:`<span class="alerta-v breve">⏰ ${d}d</span>`};
   return{cls:'',badge:''};
 }
-const TITLES={dashboard:'Dashboard',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',receber:'Contas a Receber',vendas:'Vendas / Avulsos',pagar:'Contas a Pagar',folha:'Folha & Encargos',impostos:'Impostos',provisoes:'Contas Virtuais','prov-colab':'Provisão RH',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',servicos:'Serviços',categorias:'Categorias',recibos:'Recibos',config:'Configurações'};
-const NOVO_FNS={clientes:()=>abrirModalCliente(),colaboradores:()=>abrirModalColab(),servicos:()=>abrirModalServico(),categorias:()=>abrirModalCat(),receber:()=>abrirModalReceber(),pagar:()=>abrirModalPagar(),impostos:()=>abrirModalImposto(),provisoes:()=>abrirModalConta(),vendas:()=>abrirModalVenda()};
+const TITLES={dashboard:'Dashboard',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',receber:'Contas a Receber',vendas:'Vendas / Avulsos',propostas:'Propostas Comerciais',pagar:'Contas a Pagar',folha:'Folha & Encargos',impostos:'Impostos',provisoes:'Contas Virtuais','prov-colab':'Provisão RH',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',servicos:'Serviços',categorias:'Categorias',recibos:'Recibos',config:'Configurações'};
+const NOVO_FNS={clientes:()=>abrirModalCliente(),colaboradores:()=>abrirModalColab(),servicos:()=>abrirModalServico(),categorias:()=>abrirModalCat(),receber:()=>abrirModalReceber(),pagar:()=>abrirModalPagar(),impostos:()=>abrirModalImposto(),provisoes:()=>abrirModalConta(),vendas:()=>abrirModalVenda(),propostas:()=>abrirModalProposta()};
 function navegar(p){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav-link').forEach(x=>x.classList.remove('active'));
@@ -834,7 +890,7 @@ function navegar(p){
   const btn=document.getElementById('btn-novo');
   btn.style.display=NOVO_FNS[p]?'':'none';
   if(NOVO_FNS[p])btn.onclick=NOVO_FNS[p];
-  const R={dashboard:renderDash,dre:renderDRE,fluxo:renderFluxo,centrocusto:renderCC,receber:renderReceber,vendas:renderVendas,pagar:renderPagar,folha:renderFolha,impostos:renderImpostos,provisoes:renderContas,'prov-colab':renderProvRH,clientes:renderClientes,colaboradores:renderColabs,servicos:renderServicos,categorias:renderCats,recibos:renderRecibos,config:carregarConfig};
+  const R={dashboard:renderDash,dre:renderDRE,fluxo:renderFluxo,centrocusto:renderCC,receber:renderReceber,vendas:renderVendas,propostas:renderPropostas,pagar:renderPagar,folha:renderFolha,impostos:renderImpostos,provisoes:renderContas,'prov-colab':renderProvRH,clientes:renderClientes,colaboradores:renderColabs,servicos:renderServicos,categorias:renderCats,recibos:renderRecibos,config:carregarConfig};
   if(R[p])R[p]();
 }
 document.querySelectorAll('[data-page]').forEach(a=>a.addEventListener('click',()=>navegar(a.dataset.page)));
@@ -861,7 +917,7 @@ function renderDash(){
   const recBruta=recMes.reduce((s,r)=>s+Number(r.val||0),0);
   const custos=pagMes.reduce((s,p)=>s+Number(p.val||0),0)+impMes.reduce((s,i)=>s+Number(i.val||0),0);
   const ret=recMes.reduce((s,r)=>s+Number(r.val||0)*Number(r.retP||0)/100,0);
-  const das=recBruta*Number(ERP.config.aliq||6)/100;
+  const das=recBruta*Number(ERP.config.aliq||4.5)/100;
   const resultado=(recBruta-ret-das)-custos;
   const marg=recBruta>0?resultado/recBruta*100:0;
   // Antes somava TODOS os meses pendentes (histórico inteiro). Agora reflete
@@ -900,7 +956,7 @@ function renderDRE(){
   const movs=ERP.movimentos.filter(mv=>mv.comp===mes);
   const recBruta=rec.reduce((s,r)=>s+Number(r.val||0),0);
   const ret=rec.reduce((s,r)=>s+Number(r.val||0)*Number(r.retP||0)/100,0);
-  const das=recBruta*Number(ERP.config.aliq||6)/100;
+  const das=recBruta*Number(ERP.config.aliq||4.5)/100;
   const impRet=imp.filter(i=>i.ret==='sim').reduce((s,i)=>s+Number(i.val||0),0);
   const dasFinal=Math.max(0,das-impRet);
   const recLiq=recBruta-ret-dasFinal;
@@ -991,6 +1047,10 @@ function _detalheRateioPorCliente(cliId){
 // Mesmo padrão de rateio, agora para Contas a Pagar — uma despesa pode ser
 // dividida por % entre vários clientes (ex: internet compartilhada entre 2
 // contratos). Lançamentos antigos com só um ccId viram 100% automaticamente.
+function _rateiosDoImposto(i){
+  if(i.rateios&&i.rateios.length)return i.rateios;
+  return [{ccId:i.ccId||'',pct:100}];
+}
 function _rateiosDoPagar(p){
   if(p.rateios&&p.rateios.length)return p.rateios;
   if(p.ccId)return [{ccId:p.ccId,pct:100}];
@@ -1014,11 +1074,16 @@ function renderCC(){
     const ret=rec.reduce((s,r)=>s+Number(r.val||0)*Number(r.retP||0)/100,0);
     const pagLinhas=_detalheRateioPagarPorCliente(cli.id,mes);
     const totalPag=pagLinhas.reduce((s,p)=>s+p.val,0);
-    const imp=ERP.impostos.filter(i=>i.ccId===cli.id&&i.comp===mes&&i.ret!=='sim');
+    const imp=[];
+    ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').forEach(i=>{
+      _rateiosDoImposto(i).forEach(r=>{
+        if(r.ccId===cli.id&&Number(r.pct)>0)imp.push({tipo:i.tipo,desc:i.desc,val:Number(i.val||0)*Number(r.pct)/100,pct:Number(r.pct)});
+      });
+    });
     const rateioLinhas=_detalheRateioPorCliente(cli.id);
     const maoObra=rateioLinhas.reduce((s,r)=>s+r.val,0);
     const custos=totalPag+imp.reduce((s,i)=>s+Number(i.val||0),0)+maoObra;
-    const das=receita*Number(ERP.config.aliq||6)/100;
+    const das=receita*Number(ERP.config.aliq||4.5)/100;
     const margem=receita-ret-das-custos;const perc=receita>0?margem/receita*100:0;
     html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow);">
       <div style="background:var(--brand);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;"><strong>${cli.nome}</strong><span style="font-size:11px;opacity:.8;">${cli.tipo||''}</span></div>
@@ -1028,13 +1093,18 @@ function renderCC(){
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) DAS (${ERP.config.aliq}%)</span><span>(${fmt(das)})</span></div>
         ${rateioLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span>(${fmt(r.val)})</span></div>`).join('')}
         ${pagLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span>(${fmt(p.val)})</span></div>`).join('')}
-        ${imp.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${i.tipo}: ${i.desc}</span><span>(${fmt(i.val)})</span></div>`).join('')}
+        ${imp.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${i.tipo}: ${i.desc||''}${i.pct<100?` <span class="badge b-purple">${i.pct}% rateio</span>`:''}</span><span>(${fmt(i.val)})</span></div>`).join('')}
         <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Margem</span><strong style="color:${margem>=0?'var(--green)':'var(--red)'}">${fmt(margem)} (${fmtP(perc)})</strong></div>
       </div>
     </div>`;
   });
   const pagAdmLinhas=_detalheRateioPagarPorCliente('',mes);
-  const impAdm=ERP.impostos.filter(i=>!i.ccId&&i.comp===mes&&i.ret!=='sim');
+  const impAdm=[];
+  ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').forEach(i=>{
+    _rateiosDoImposto(i).forEach(r=>{
+      if(!r.ccId&&Number(r.pct)>0)impAdm.push({tipo:i.tipo,desc:i.desc,val:Number(i.val||0)*Number(r.pct)/100,pct:Number(r.pct)});
+    });
+  });
   const rateioAdmLinhas=_detalheRateioPorCliente('');
   const totAdm=pagAdmLinhas.reduce((s,p)=>s+p.val,0)+impAdm.reduce((s,i)=>s+Number(i.val||0),0)+rateioAdmLinhas.reduce((s,r)=>s+r.val,0);
   if(totAdm>0)html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;"><div style="background:#5a6a7a;color:#fff;padding:12px 16px;"><strong>⚙️ ADM Geral</strong></div><div style="padding:12px 16px;">${rateioAdmLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span style="color:var(--red)">${fmt(r.val)}</span></div>`).join('')}${pagAdmLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}${impAdm.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc||p.tipo||''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Total ADM</span><strong style="color:var(--red)">${fmt(totAdm)}</strong></div></div></div>`;
@@ -1280,15 +1350,56 @@ function renderFolha(){
 }
 
 // IMPOSTOS
+let _rateiosImp=[];
+function renderRateiosImp(){
+  document.getElementById('mimp-rateio-lista').innerHTML=_rateiosImp.length?_rateiosImp.map((r,i)=>`<div class="item-venda">
+      <select style="flex:2;" onchange="_rateiosImp[${i}].ccId=this.value">
+        <option value="" ${!r.ccId?'selected':''}>ADM Geral (não rateado)</option>
+        ${ERP.clientes.map(c=>`<option value="${c.id}" ${c.id===r.ccId?'selected':''}>${c.nome}</option>`).join('')}
+      </select>
+      <input type="number" value="${r.pct}" min="0" max="100" step="0.1" style="width:70px;" placeholder="%" oninput="_rateiosImp[${i}].pct=Number(this.value)||0;renderRateiosImp()">
+      <span style="font-size:12px;color:var(--text3);">%</span>
+      <button class="btn btn-danger btn-sm" onclick="_rateiosImp.splice(${i},1);renderRateiosImp()">×</button>
+    </div>`).join(''):'<p style="color:var(--text3);font-size:12px;margin:4px 0 6px;">Nenhum rateio — o imposto fica em ADM Geral por padrão.</p>';
+  const total=Math.round(_rateiosImp.reduce((s,r)=>s+Number(r.pct||0),0)*10)/10;
+  const el=document.getElementById('mimp-rateio-total');
+  if(_rateiosImp.length){
+    el.textContent=`Total: ${total}%`+(total===100?' ✅':total>100?' — passou de 100%, ajuste':' — falta '+(Math.round((100-total)*10)/10)+'% pra completar 100%');
+    el.style.color=total===100?'var(--green)':'var(--red)';
+  } else el.textContent='';
+}
+function addRateioImp(){
+  const usado=_rateiosImp.reduce((s,r)=>s+Number(r.pct||0),0);
+  _rateiosImp.push({ccId:'',pct:Math.max(0,Math.round((100-usado)*10)/10)});
+  renderRateiosImp();
+}
+function ratearImpPorFaturamento(){
+  const mes=document.getElementById('mimp-comp').value||getMes();
+  const partes=[];let tot=0;
+  ERP.clientes.forEach(c=>{
+    const v=ERP.receber.filter(r=>r.cliId===c.id&&(r.comp===mes||r.venc?.slice(0,7)===mes)).reduce((s,r)=>s+Number(r.val||0),0);
+    if(v>0){partes.push({ccId:c.id,fat:v});tot+=v;}
+  });
+  if(!tot){alert('Nenhum faturamento lançado na competência '+mes+'. Lance as faturas em Contas a Receber primeiro.');return;}
+  _rateiosImp=partes.map(p=>({ccId:p.ccId,pct:Math.round(p.fat/tot*1000)/10}));
+  const soma=_rateiosImp.reduce((s,r)=>s+r.pct,0);
+  _rateiosImp[_rateiosImp.length-1].pct=Math.round((_rateiosImp[_rateiosImp.length-1].pct+(100-soma))*10)/10;
+  renderRateiosImp();
+}
 function abrirModalImposto(id){
-  popCC(['mimp-cc']);const h=new Date();
-  if(id){const i=ERP.impostos.find(x=>x.id===id);document.getElementById('mimp-id').value=i.id;document.getElementById('mimp-tipo').value=i.tipo||'DAS';document.getElementById('mimp-comp').value=i.comp||'';document.getElementById('mimp-desc').value=i.desc||'';document.getElementById('mimp-val').value=i.val||'';document.getElementById('mimp-venc').value=i.venc||'';document.getElementById('mimp-cc').value=i.ccId||'';document.getElementById('mimp-ret').value=i.ret||'nao';document.getElementById('mimp-st').value=i.st||'pendente';document.getElementById('mimp-dpag').value=i.dpag||'';}
-  else{['mimp-id','mimp-desc','mimp-val','mimp-dpag'].forEach(x=>document.getElementById(x).value='');document.getElementById('mimp-tipo').value='DAS';document.getElementById('mimp-comp').value=getMes();document.getElementById('mimp-venc').value=`${getMes()}-${String(ERP.config.dasDia||20).padStart(2,'0')}`;document.getElementById('mimp-cc').value='';document.getElementById('mimp-ret').value='nao';document.getElementById('mimp-st').value='pendente';}
+  const h=new Date();
+  if(id){const i=ERP.impostos.find(x=>x.id===id);document.getElementById('mimp-id').value=i.id;document.getElementById('mimp-tipo').value=i.tipo||'DAS';document.getElementById('mimp-comp').value=i.comp||'';document.getElementById('mimp-desc').value=i.desc||'';document.getElementById('mimp-val').value=i.val||'';document.getElementById('mimp-venc').value=i.venc||'';_rateiosImp=(i.rateios&&i.rateios.length)?i.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct)||0})):(i.ccId?[{ccId:i.ccId,pct:100}]:[]);renderRateiosImp();document.getElementById('mimp-ret').value=i.ret||'nao';document.getElementById('mimp-st').value=i.st||'pendente';document.getElementById('mimp-dpag').value=i.dpag||'';}
+  else{['mimp-id','mimp-desc','mimp-val','mimp-dpag'].forEach(x=>document.getElementById(x).value='');document.getElementById('mimp-tipo').value='DAS';document.getElementById('mimp-comp').value=getMes();document.getElementById('mimp-venc').value=`${getMes()}-${String(ERP.config.dasDia||20).padStart(2,'0')}`;_rateiosImp=[];renderRateiosImp();document.getElementById('mimp-ret').value='nao';document.getElementById('mimp-st').value='pendente';}
   abrirModal('modal-imp');
 }
 function salvarImposto(){
-  const id=document.getElementById('mimp-id').value;const ccId=document.getElementById('mimp-cc').value;const ccNome=ERP.clientes.find(c=>c.id===ccId)?.nome||'ADM Geral';
-  const obj={up:Date.now(),id:id||gid(),tipo:document.getElementById('mimp-tipo').value,comp:document.getElementById('mimp-comp').value,desc:document.getElementById('mimp-desc').value.trim(),val:Number(document.getElementById('mimp-val').value||0),venc:document.getElementById('mimp-venc').value,ccId,ccNome,ret:document.getElementById('mimp-ret').value,st:document.getElementById('mimp-st').value,dpag:document.getElementById('mimp-dpag').value};
+  const id=document.getElementById('mimp-id').value;
+  const rateios=_rateiosImp.filter(r=>Number(r.pct)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct)}));
+  const totR=Math.round(rateios.reduce((s,r)=>s+r.pct,0)*10)/10;
+  if(rateios.length&&Math.round(totR)!==100){alert('O rateio precisa somar 100% (está em '+totR+'%).');return;}
+  const ccId=rateios.length===1?rateios[0].ccId:'';
+  const ccNome=rateios.length>1?'⚖️ Rateado':(rateios.length===1?(ERP.clientes.find(c=>c.id===rateios[0].ccId)?.nome||'ADM Geral'):'ADM Geral');
+  const obj={up:Date.now(),id:id||gid(),tipo:document.getElementById('mimp-tipo').value,comp:document.getElementById('mimp-comp').value,desc:document.getElementById('mimp-desc').value.trim(),val:Number(document.getElementById('mimp-val').value||0),venc:document.getElementById('mimp-venc').value,ccId,ccNome,rateios:rateios.length?rateios:undefined,ret:document.getElementById('mimp-ret').value,st:document.getElementById('mimp-st').value,dpag:document.getElementById('mimp-dpag').value};
   if(id){const i=ERP.impostos.findIndex(x=>x.id===id);ERP.impostos[i]=obj;}else ERP.impostos.push(obj);
   salvarERP();fm('modal-imp');renderImpostos();
 }
@@ -1611,6 +1722,218 @@ function abrirModalRecibo(tipo){
   document.getElementById(tipo==='cliente'?'mrb-num':'mrb-rpa-num').value=num;document.getElementById(tipo==='cliente'?'mrb-comp':'mrb-rpa-comp').value=comp;
   abrirModal('modal-recibo');
 }
+
+// ===== PROPOSTAS COMERCIAIS =====
+const PROP_PADRAO={
+  sobre:`A MJL Serviços e Soluções é a sua parceira estratégica para transformar a gestão de serviços de limpeza e conservação. Com um compromisso inabalável com a qualidade, eficiência e confiabilidade, oferecemos soluções completas em terceirização que garantem um ambiente impecável, higienizado e acolhedor.\n\nNossa proposta vai além da simples prestação de serviços: ela engloba um planejamento meticuloso e uma execução impecável, liberando sua administração para focar no que realmente importa — o bem-estar e a valorização do seu patrimônio.`,
+  porque:`Equipe Especializada: profissionais rigorosamente selecionados, treinados e capacitados para as demandas específicas do seu condomínio.\nGestão Descomplicada: cuidamos de toda a burocracia, encargos e substituições, assegurando a continuidade e a qualidade dos serviços.\nOtimização de Custos: valores transparentes e competitivos, que incluem todas as despesas necessárias para uma operação sem surpresas.\nSupervisão Constante: acompanhamento técnico-administrativo e avaliações frequentes para garantir a excelência e a melhoria contínua.\nGestão Digital: ponto eletrônico com foto e GPS, cronograma de tarefas com registro fotográfico e canal direto de chamados — transparência total da operação.`,
+  respcli:`Disponibilizar condições seguras e adequadas para a prestação dos serviços, incluindo local para armazenamento de materiais, água e energia elétrica.\nFornecer local apropriado para alimentação dos colaboradores da MJL.\nComunicar assuntos pertinentes ao serviço diretamente ao encarregado/supervisor responsável pelo contrato.`,
+  respmjl:`Garantir serviço e atendimento de alta qualidade e eficiência, com avaliações contínuas e aprimoramento.\nCumprir integralmente todas as obrigações sociais e trabalhistas (CLT), incluindo transporte, alimentação e EPIs.\nRealizar avaliações frequentes dos serviços, implementando ações de melhoria contínua.\nAcompanhamento e gerenciamento completo de toda a operação, com supervisão externa periódica.\nManter reserva técnica de funcionários para cobertura rápida em caso de faltas, assegurando a continuidade dos serviços.\nSubstituir, em até 48 horas, qualquer colaborador mediante solicitação por escrito do contratante.`,
+  resumo:`Vigência: 12 (doze) meses, com renovação automática por igual período, salvo manifestação por escrito com 30 dias de antecedência.\nReajuste: anual, pelo índice integral da Convenção Coletiva da categoria (data-base março), aplicado no mês seguinte à homologação; novos benefícios da categoria são repassados ao valor contratado.\nPagamento: até o 3º dia útil do mês, mediante apresentação da nota fiscal.\nEncargos: todos os encargos sociais, trabalhistas e previdenciários são de responsabilidade exclusiva da MJL; guias comprobatórias entregues mensalmente junto à nota fiscal.\nRescisão: por qualquer das partes, mediante aviso prévio por escrito de 30 dias.\nNão-aliciamento: vedada a contratação direta de colaboradores da MJL durante o contrato e por 180 dias após o término.`,
+  comp:`O valor de cada posto contempla: salário-base conforme CCT da categoria + adicionais aplicáveis, encargos sociais (FGTS, INSS), provisões legais (férias + 1/3, 13º salário, verbas rescisórias), benefícios (vale-transporte e demais previstos na CCT), uniforme, EPIs, supervisão, taxa administrativa e tributos.\nDetalhamento completo da composição de custos disponível mediante solicitação, no padrão exigido em contratações públicas (IN nº 05/2017).`,
+  pag:`Os pagamentos deverão ser efetuados até o 3º dia útil do mês subsequente, mediante apresentação de nota fiscal. Em caso de atraso, incidirão multa, juros de mora e correção monetária conforme condições contratuais.`
+};
+let _postosProp=[];
+function renderPostosProp(){
+  document.getElementById('mpr-postos').innerHTML=_postosProp.length?_postosProp.map((p,i)=>`<div class="item-venda" style="flex-wrap:wrap;">
+      <input style="flex:2;min-width:110px;" placeholder="Função (ex: ASG)" value="${p.funcao||''}" oninput="_postosProp[${i}].funcao=this.value">
+      <input style="flex:2;min-width:130px;" placeholder="Escala/horário (ex: 6x1 — 07h às 15h20)" value="${p.escala||''}" oninput="_postosProp[${i}].escala=this.value">
+      <input type="number" style="width:56px;" min="1" placeholder="Qtd" value="${p.qtd||1}" oninput="_postosProp[${i}].qtd=Number(this.value)||1;renderPostosProp()">
+      <input type="number" style="width:110px;" step="0.01" placeholder="Valor unit." value="${p.val||''}" oninput="_postosProp[${i}].val=Number(this.value)||0;renderPostosProp()">
+      <button class="btn btn-danger btn-sm" onclick="_postosProp.splice(${i},1);renderPostosProp()">×</button>
+    </div>`).join(''):'<p style="color:var(--text3);font-size:12px;margin:4px 0 6px;">Adicione os postos: função, escala, quantidade e valor.</p>';
+  const tot=_postosProp.reduce((s,p)=>s+(Number(p.qtd)||1)*(Number(p.val)||0),0);
+  document.getElementById('mpr-total').textContent=_postosProp.length?'Total mensal: '+fmt(tot):'';
+}
+function addPostoProp(){_postosProp.push({funcao:'',escala:'',qtd:1,val:0});renderPostosProp();}
+function abrirModalProposta(id){
+  const hoje=new Date();const iso=d=>d.toISOString().slice(0,10);
+  if(id){
+    const p=ERP.propostas.find(x=>x.id===id);if(!p)return;
+    document.getElementById('mpr-titulo').textContent='Editar Proposta '+p.num;
+    document.getElementById('mpr-id').value=p.id;
+    document.getElementById('mpr-ac').value=p.ac||'';document.getElementById('mpr-cli').value=p.cli||'';
+    document.getElementById('mpr-end').value=p.end||'';document.getElementById('mpr-data').value=p.data||'';
+    document.getElementById('mpr-val').value=p.validade||'';document.getElementById('mpr-mat').value=p.mat||'mjl';
+    document.getElementById('mpr-st').value=p.st||'rascunho';
+    ['sobre','resp','resumo','comp'].forEach(b=>{document.getElementById('mpr-b-'+b).checked=(p.blocos||{})[b]!==false&&!(b==='comp'&&!(p.blocos||{}).comp);});
+    document.getElementById('mpr-b-comp').checked=!!(p.blocos||{}).comp;
+    document.getElementById('mpr-t-sobre').value=p.tSobre||PROP_PADRAO.sobre;
+    document.getElementById('mpr-t-porque').value=p.tPorque||PROP_PADRAO.porque;
+    document.getElementById('mpr-t-respcli').value=p.tRespCli||PROP_PADRAO.respcli;
+    document.getElementById('mpr-t-respmjl').value=p.tRespMjl||PROP_PADRAO.respmjl;
+    document.getElementById('mpr-t-resumo').value=p.tResumo||PROP_PADRAO.resumo;
+    document.getElementById('mpr-t-comp').value=p.tComp||PROP_PADRAO.comp;
+    document.getElementById('mpr-t-pag').value=p.tPag||PROP_PADRAO.pag;
+    _postosProp=(p.postos||[]).map(x=>({...x}));
+  }else{
+    document.getElementById('mpr-titulo').textContent='Nova Proposta';
+    document.getElementById('mpr-id').value='';
+    ['mpr-ac','mpr-cli','mpr-end'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('mpr-data').value=iso(hoje);
+    const v=new Date(hoje);v.setDate(v.getDate()+30);document.getElementById('mpr-val').value=iso(v);
+    document.getElementById('mpr-mat').value='mjl';document.getElementById('mpr-st').value='rascunho';
+    document.getElementById('mpr-b-sobre').checked=true;document.getElementById('mpr-b-resp').checked=true;
+    document.getElementById('mpr-b-resumo').checked=true;document.getElementById('mpr-b-comp').checked=false;
+    document.getElementById('mpr-t-sobre').value=PROP_PADRAO.sobre;
+    document.getElementById('mpr-t-porque').value=PROP_PADRAO.porque;
+    document.getElementById('mpr-t-respcli').value=PROP_PADRAO.respcli;
+    document.getElementById('mpr-t-respmjl').value=PROP_PADRAO.respmjl;
+    document.getElementById('mpr-t-resumo').value=PROP_PADRAO.resumo;
+    document.getElementById('mpr-t-comp').value=PROP_PADRAO.comp;
+    document.getElementById('mpr-t-pag').value=PROP_PADRAO.pag;
+    _postosProp=[{funcao:'',escala:'',qtd:1,val:0}];
+  }
+  renderPostosProp();abrirModal('modal-prop');
+}
+function salvarProposta(imprimir){
+  const id=document.getElementById('mpr-id').value;
+  const cli=document.getElementById('mpr-cli').value.trim();
+  if(!cli){alert('Informe o cliente/condomínio.');return;}
+  const postos=_postosProp.filter(p=>p.funcao&&Number(p.val)>0).map(p=>({funcao:p.funcao.trim(),escala:(p.escala||'').trim(),qtd:Number(p.qtd)||1,val:Number(p.val)}));
+  if(!postos.length){alert('Adicione ao menos um posto com função e valor.');return;}
+  const ano=new Date().getFullYear();
+  let num;
+  if(id){num=ERP.propostas.find(x=>x.id===id)?.num;}
+  else{const seq=ERP.propostas.filter(p=>(p.num||'').includes('-'+ano+'-')).length+1;num='PROP-'+ano+'-'+String(seq).padStart(3,'0');}
+  const obj={up:Date.now(),id:id||gid(),num,
+    ac:document.getElementById('mpr-ac').value.trim(),cli,
+    end:document.getElementById('mpr-end').value.trim(),
+    data:document.getElementById('mpr-data').value,validade:document.getElementById('mpr-val').value,
+    mat:document.getElementById('mpr-mat').value,st:document.getElementById('mpr-st').value,
+    postos,total:postos.reduce((s,p)=>s+p.qtd*p.val,0),
+    blocos:{sobre:document.getElementById('mpr-b-sobre').checked,resp:document.getElementById('mpr-b-resp').checked,resumo:document.getElementById('mpr-b-resumo').checked,comp:document.getElementById('mpr-b-comp').checked},
+    tSobre:document.getElementById('mpr-t-sobre').value,tPorque:document.getElementById('mpr-t-porque').value,
+    tRespCli:document.getElementById('mpr-t-respcli').value,tRespMjl:document.getElementById('mpr-t-respmjl').value,
+    tResumo:document.getElementById('mpr-t-resumo').value,tComp:document.getElementById('mpr-t-comp').value,tPag:document.getElementById('mpr-t-pag').value};
+  if(id){const i=ERP.propostas.findIndex(x=>x.id===id);ERP.propostas[i]=obj;}else ERP.propostas.push(obj);
+  salvarERP();fm('modal-prop');renderPropostas();
+  if(imprimir)imprimirProposta(obj);
+}
+function setStatusProp(id,st){const p=ERP.propostas.find(x=>x.id===id);if(p){p.st=st;p.up=Date.now();salvarERP();renderPropostas();}}
+function excluirProp(id){if(!confirm('Excluir esta proposta?'))return;ERP.propostas=ERP.propostas.filter(x=>x.id!==id);_marcarExcluido('propostas',id);salvarERP();renderPropostas();}
+function renderPropostas(){
+  const stMap={rascunho:['b-gray','Rascunho'],enviada:['b-blue','Enviada'],negociacao:['b-yellow','Negociação'],fechada:['b-green','Fechada ✅'],perdida:['b-red','Perdida']};
+  const f=document.getElementById('prop-funil');
+  const tot=ERP.propostas.length;const fech=ERP.propostas.filter(p=>p.st==='fechada').length;
+  const env=ERP.propostas.filter(p=>['enviada','negociacao'].includes(p.st)).length;
+  const conv=env+fech>0?Math.round(fech/(fech+ERP.propostas.filter(p=>p.st==='perdida').length||1)*100):0;
+  const kpi=(l,v,cor)=>`<div style="flex:1;min-width:110px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow);"><div style="font-size:11px;color:var(--text3);font-weight:700;">${l}</div><div style="font-size:22px;font-weight:800;color:${cor||'var(--text)'};">${v}</div></div>`;
+  f.innerHTML=kpi('Propostas',tot)+kpi('Em aberto',env,'var(--orange)')+kpi('Fechadas',fech,'var(--green)')+kpi('Conversão',conv+'%','var(--brand)');
+  const el=document.getElementById('lista-propostas');
+  if(!tot){el.innerHTML='<div class="card" style="text-align:center;padding:28px;color:var(--text3);">Nenhuma proposta ainda. Clique em <strong>+ Novo</strong> para criar a primeira — ela sai pronta pra enviar, com a identidade da MJL.</div>';return;}
+  el.innerHTML='<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>Cliente</th><th>Emissão</th><th>Validade</th><th>Total/mês</th><th>Status</th><th>Ações</th></tr></thead><tbody>'+
+    [...ERP.propostas].sort((a,b)=>(b.up||0)-(a.up||0)).map(p=>{const s=stMap[p.st]||stMap.rascunho;
+      return`<tr><td><strong>${p.num}</strong></td><td>${p.cli}</td><td>${p.data?new Date(p.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td>${p.validade?new Date(p.validade+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td><strong>${fmt(p.total)}</strong></td>
+      <td><select onchange="setStatusProp('${p.id}',this.value)" style="padding:4px 6px;border-radius:6px;border:1.5px solid var(--border);font-size:12px;">${Object.keys(stMap).map(k=>`<option value="${k}" ${p.st===k?'selected':''}>${stMap[k][1]}</option>`).join('')}</select></td>
+      <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalProposta('${p.id}')">✏️</button><button class="btn btn-primary btn-sm" onclick="imprimirProposta(ERP.propostas.find(x=>x.id==='${p.id}'))">🖨️</button><button class="btn btn-danger btn-sm" onclick="excluirProp('${p.id}')">🗑️</button></td></tr>`;}).join('')+'</tbody></table></div></div>';
+}
+
+function imprimirProposta(p){
+  if(!p)return;
+  const fmtD=d=>d?new Date(d+'T12:00').toLocaleDateString('pt-BR'):'—';
+  const linhas=t=>(t||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  const paras=t=>(t||'').split('\n').map(x=>x.trim()).filter(Boolean).map(x=>`<p>${x}</p>`).join('');
+  const bullets=t=>linhas(t).map(x=>`<li>${x}</li>`).join('');
+  const tot=p.postos.reduce((s,x)=>s+x.qtd*x.val,0);
+  const matTxt=p.mat==='mjl'?'Os materiais de limpeza serão fornecidos pela MJL (já inclusos no valor), assim como os EPIs e uniformes dos colaboradores.':'Os materiais e equipamentos de limpeza serão fornecidos pelo Condomínio/Cliente. A MJL fornece os uniformes e EPIs de uso pessoal dos seus colaboradores.';
+  const B=p.blocos||{};
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${p.num} — ${p.cli}</title><style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#2b2b2b;font-size:13px;line-height:1.55;}
+    .pg{width:210mm;min-height:290mm;padding:18mm 16mm;page-break-after:always;position:relative;}
+    .pg:last-child{page-break-after:auto;}
+    h1{font-size:34px;font-weight:800;color:#111;}
+    .sub{font-size:30px;font-weight:800;color:#9fcdf0;}
+    .risco{color:#9fcdf0;font-weight:800;letter-spacing:2px;}
+    h2{font-size:26px;font-weight:800;color:#111;margin-bottom:2px;}
+    h3{font-size:15px;font-weight:800;margin:14px 0 6px;}
+    p{margin-bottom:8px;}
+    ul{margin:6px 0 10px 18px;}li{margin-bottom:6px;}
+    .capa-band{position:absolute;left:0;top:70mm;bottom:12mm;width:120mm;background:#bfe0f8;border-radius:0 6px 6px 0;}
+    .capa-card{position:absolute;left:14mm;top:96mm;width:96mm;background:#fff;border-radius:22px;padding:16mm 12mm;}
+    .capa-card .lbl{font-size:11px;color:#777;margin-top:10px;}
+    .capa-card .val{font-size:15px;font-weight:800;}
+    .linha-azul{border-top:3px solid #bfe0f8;margin:6px 0 14px;}
+    .duascol{display:flex;gap:10mm;}.duascol>div{flex:1;}
+    table{width:100%;border-collapse:collapse;margin:8px 0 4px;}
+    th{background:#eaf4fd;text-align:left;padding:8px 10px;font-size:12px;border-bottom:2px solid #bfe0f8;}
+    td{padding:9px 10px;border-bottom:1px solid #e8eef4;font-size:13px;}
+    .tot-row td{font-weight:800;font-size:14px;border-top:2px solid #bfe0f8;background:#f6fbff;}
+    .rodape{position:absolute;bottom:8mm;left:16mm;right:16mm;font-size:9px;color:#888;border-top:1px solid #ddd;padding-top:4px;}
+    .ass{margin-top:26mm;display:flex;gap:14mm;}
+    .ass div{flex:1;border-top:1.5px solid #444;padding-top:5px;text-align:center;font-size:12px;}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  </style></head><body>
+
+  <div class="pg">
+    <h1>Proposta Comercial</h1>
+    <div class="sub">MJL Serviços e Soluções</div>
+    <div class="capa-band"></div>
+    <div class="capa-card">
+      <div style="font-size:16px;font-weight:800;">A/C ${p.ac||''}</div>
+      <div style="font-size:12px;color:#555;">${p.cli}${p.end?' — '+p.end:''}</div>
+      <div class="linha-azul" style="margin-top:14px;"></div>
+      <div style="font-weight:700;">MJL Serviços e Soluções</div>
+      <div style="font-size:12px;">📞 (21) 96838-1313<br>✉️ mjlservicosesolucoes@gmail.com</div>
+      <div class="lbl">Nº da Proposta:</div><div class="val">${p.num}</div>
+      <div class="lbl">Data de Emissão:</div><div class="val">${fmtD(p.data)}</div>
+      <div class="lbl">Validade da Proposta:</div><div class="val">${fmtD(p.validade)}</div>
+    </div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — Av. das Américas 4200, Bl 1 Sala 305, Barra da Tijuca — Rio de Janeiro/RJ</div>
+  </div>
+
+  ${B.sobre!==false?`<div class="pg">
+    <h2>Sobre a</h2><div class="sub" style="font-size:26px;">Empresa</div>
+    <div class="risco">//////</div>
+    <h3>Quem Somos</h3>${paras(p.tSobre)}
+    <h3>Porque Escolher a MJL</h3><ul>${bullets(p.tPorque)}</ul>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
+  </div>`:''}
+
+  ${B.resp!==false?`<div class="pg">
+    <h2>Descrição do Projeto</h2><div class="sub" style="font-size:26px;">Especificações</div>
+    <div class="risco">//////</div>
+    <h3>Projeto — ${p.cli}</h3>
+    <p>Propomos a terceirização com equipe dedicada e qualificada, garantindo limpeza, organização e conservação contínua, com supervisão da MJL e gestão digital da operação (ponto eletrônico com foto e GPS, cronograma de tarefas com registro fotográfico e canal de chamados).</p>
+    <div class="duascol" style="margin-top:8px;">
+      <div><h3>Responsabilidades do Condomínio</h3><ul>${bullets(p.tRespCli)}</ul></div>
+      <div><h3>Responsabilidades da MJL</h3><ul>${bullets(p.tRespMjl)}</ul></div>
+    </div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
+  </div>`:''}
+
+  <div class="pg">
+    <h2>Orçamento</h2><div class="sub" style="font-size:26px;">Detalhado</div>
+    <div class="risco">//////</div>
+    <h3>Planejamento Técnico e Operacional</h3>
+    <p>A MJL Serviços e Soluções selecionará uma equipe qualificada e capacitada para as atividades. O planejamento será adaptado às necessidades específicas do ${p.cli}.</p>
+    <p>${matTxt}</p>
+    <h3>Investimento Mensal</h3>
+    <table><thead><tr><th>Função</th><th>Escala / Horário</th><th style="text-align:center;">Qtd</th><th style="text-align:right;">Valor Unitário</th><th style="text-align:right;">Total</th></tr></thead><tbody>
+      ${p.postos.map(x=>`<tr><td><strong>${x.funcao}</strong></td><td>${x.escala||'—'}</td><td style="text-align:center;">${x.qtd}</td><td style="text-align:right;">${fmt(x.val)}</td><td style="text-align:right;"><strong>${fmt(x.qtd*x.val)}</strong></td></tr>`).join('')}
+      <tr class="tot-row"><td colspan="4">Total Investimento Mensal — já inclusos todos os impostos, encargos, benefícios e uniforme</td><td style="text-align:right;">${fmt(tot)}</td></tr>
+    </tbody></table>
+    ${B.comp?`<h3>Composição de Custos</h3>${paras(p.tComp)}`:''}
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
+  </div>
+
+  <div class="pg">
+    ${B.resumo!==false?`<h2>Resumo das</h2><div class="sub" style="font-size:26px;">Condições Contratuais</div>
+    <div class="risco">//////</div>
+    <ul>${bullets(p.tResumo)}</ul>`:''}
+    <h3 style="margin-top:16px;">Condições de Pagamento</h3>${paras(p.tPag)}
+    <h3>Conclusão</h3>
+    <p>A MJL Serviços e Soluções está pronta para ser a parceira que o ${p.cli} precisa para elevar o padrão dos seus serviços. Nossa expertise, compromisso com a qualidade e foco na satisfação do cliente são a garantia de uma parceria de sucesso.</p>
+    <p>Estamos à disposição para quaisquer esclarecimentos e para formalizar esta parceria.</p>
+    <p style="margin-top:14px;">Rio de Janeiro, ${fmtD(p.data)}</p>
+    <div class="ass"><div>${p.cli}</div><div>MJL Serviços e Soluções LTDA</div></div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
+  </div>
+  <script>window.onload=function(){window.print();};</scr`+`ipt></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+}
+
 function gerarRecibo(){
   const cfg=ERP.config;let r={};
   if(tipoRec==='cliente'){const cliId=document.getElementById('mrb-cli').value;const cli=ERP.clientes.find(c=>c.id===cliId);r={up:Date.now(),id:gid(),tipo:'cliente',num:document.getElementById('mrb-num').value,cliId,cliNome:cli?.nome||'',cliCNPJ:cli?.cnpj||'',val:Number(document.getElementById('mrb-val').value||0),desc:document.getElementById('mrb-desc').value,comp:document.getElementById('mrb-comp').value,data:new Date().toISOString().slice(0,10)};}
@@ -1629,7 +1952,7 @@ function renderRecibos(){
 }
 
 // CONFIG
-function carregarConfig(){['cfg-nome','cfg-cnpj','cfg-tel','cfg-email','cfg-end'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=ERP.config[id.replace('cfg-','')]||'';});document.getElementById('cfg-regime').value=ERP.config.regime||'simples';document.getElementById('cfg-aliq').value=ERP.config.aliq||6;document.getElementById('cfg-das').value=ERP.config.dasDia||20;document.getElementById('cfg-jur').value=ERP.config.jurPerc||5;}
+function carregarConfig(){['cfg-nome','cfg-cnpj','cfg-tel','cfg-email','cfg-end'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=ERP.config[id.replace('cfg-','')]||'';});document.getElementById('cfg-regime').value=ERP.config.regime||'simples';document.getElementById('cfg-aliq').value=ERP.config.aliq||4.5;document.getElementById('cfg-das').value=ERP.config.dasDia||20;document.getElementById('cfg-jur').value=ERP.config.jurPerc||5;}
 function salvarConfig(){ERP.config={...ERP.config,nome:document.getElementById('cfg-nome').value.trim(),cnpj:document.getElementById('cfg-cnpj').value.trim(),tel:document.getElementById('cfg-tel').value.trim(),email:document.getElementById('cfg-email').value.trim(),end:document.getElementById('cfg-end').value.trim(),regime:document.getElementById('cfg-regime').value,aliq:Number(document.getElementById('cfg-aliq').value||6),dasDia:Number(document.getElementById('cfg-das').value||20),jurPerc:Number(document.getElementById('cfg-jur').value||5)};salvarERP();alert('✅ Salvo!');}
 
 // HELPERS

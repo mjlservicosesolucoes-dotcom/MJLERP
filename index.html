@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v11</title>
+<title>MJL ERP Financeiro v14</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -310,10 +310,10 @@ tr:hover td{background:#fafbff;}
     <div class="page" id="page-folha">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <strong style="font-size:15px;color:var(--brand)">Folha de Pagamento & Encargos</strong>
-        <button class="btn btn-primary btn-sm" onclick="gerarFolha()">⚡ Gerar Folha do Mês</button>
+        <button class="btn btn-primary btn-sm" onclick="navegar('folhames')">🧾 Ir para Folha do Mês (real)</button>
       </div>
       <div class="card" style="padding:0;"><div class="table-wrap"><table>
-        <thead><tr><th>Colaborador</th><th>Tipo</th><th>Remuneração (base+adic.)</th><th>FGTS 8%</th><th>INSS Emp.</th><th>Custo Total</th><th>Prov. Férias/mês</th><th>Prov. 13°/mês</th><th>Centro</th></tr></thead>
+        <thead><tr><th>Colaborador</th><th>Tipo</th><th>Remuneração (base+adic.)</th><th>FGTS 8%</th><th>Benefícios (estim.)</th><th>Custo Total</th><th>Prov. Férias/mês</th><th>Prov. 13°/mês</th><th>Centro</th></tr></thead>
         <tbody id="tb-folha"></tbody>
       </table></div></div>
     </div>
@@ -518,6 +518,12 @@ tr:hover td{background:#fafbff;}
       <div class="fg"><label>Periculosidade (R$)</label><input type="number" id="mco-peric" step="0.01" oninput="calcCustoCol()"></div>
     </div>
     <div class="fr"><div class="fg"><label>Outros adicionais (R$)</label><input type="number" id="mco-outros" step="0.01" oninput="calcCustoCol()"></div><div class="fg"><label>Remuneração Total</label><input id="mco-rem" readonly style="font-weight:700;color:var(--brand);"></div></div>
+    <div class="fr3">
+      <div class="fg"><label>VT líquido (R$/mês)</label><input type="number" id="mco-vt" step="0.01" oninput="calcCustoCol()" placeholder="VT − 6% do salário"></div>
+      <div class="fg"><label>VR / VA (R$/mês)</label><input type="number" id="mco-vr" step="0.01" oninput="calcCustoCol()"></div>
+      <div class="fg"><label>Outros benefícios (R$/mês)</label><input type="number" id="mco-benef" step="0.01" oninput="calcCustoCol()" placeholder="Seguro, plano, uniforme..."></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin:-6px 0 12px;">💡 Benefícios entram no CUSTO do posto (e no Centro de Custo do condomínio), mas não sofrem encargos nem provisões.</div>
     <div style="font-size:11px;color:var(--text3);margin:-6px 0 12px;">💡 Informe os adicionais em R$ (valor médio mensal). Encargos, provisões e o Centro de Custo passam a ser calculados sobre a Remuneração Total — assim você vê o custo real de cada condomínio.</div>
     <div style="background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -613,11 +619,12 @@ tr:hover td{background:#fafbff;}
     <input type="hidden" id="mpag-id">
     <div class="fr"><div class="fg"><label>Descrição *</label><input id="mpag-desc"></div><div class="fg"><label>Categoria</label><select id="mpag-cat"><option value="">Sem categoria</option></select></div></div>
     <div class="fr"><div class="fg"><label>Valor (R$)</label><input type="number" id="mpag-val" step="0.01"></div><div class="fg"><label>Vencimento</label><input type="date" id="mpag-venc"></div></div>
-    <div class="fr"><div class="fg"><label>Recorrência</label><select id="mpag-rec"><option value="unica">Única</option><option value="mensal">Mensal</option><option value="anual">Anual</option></select></div><div class="fg"></div></div>
+    <div class="fr"><div class="fg"><label>Recorrência</label><select id="mpag-rec"><option value="unica">Única</option><option value="mensal">Mensal</option><option value="anual">Anual</option></select></div><div class="fg"><label>Competência (mês do USO)</label><input type="month" id="mpag-comp"><div style="font-size:10px;color:var(--text3);margin-top:2px;">Ex: VT pago em 28/07 pra usar em agosto → competência 2026-08</div></div></div>
     <div style="background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <label style="font-size:11px;font-weight:700;color:var(--text2);">CENTRO DE CUSTO (RATEIO POR %)</label>
-        <button class="btn btn-ghost btn-sm" onclick="addRateioPag()">+ Cliente</button>
+        <div style="display:flex;gap:6px;"><button class="btn btn-ghost btn-sm" onclick="ratearPagarPorEquipe()">⚖️ Ratear pela equipe (VT/VR)</button>
+        <button class="btn btn-ghost btn-sm" onclick="addRateioPag()">+ Cliente</button></div>
       </div>
       <div id="mpag-rateio-lista"></div>
       <div id="mpag-rateio-total" style="font-size:11px;font-weight:700;margin-top:6px;text-align:right;"></div>
@@ -1001,7 +1008,7 @@ function limparF(pre){['q','st','cli','cat','cc','de','ate','tp'].forEach(s=>{co
 function renderDash(){
   const mes=getMes();
   const recMes=ERP.receber.filter(r=>r.comp===mes||r.venc?.slice(0,7)===mes);
-  const pagMes=ERP.pagar.filter(p=>p.venc?.slice(0,7)===mes);
+  const pagMes=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes);
   const impMes=ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim');
   const recBruta=recMes.reduce((s,r)=>s+Number(r.val||0),0);
   const custos=pagMes.reduce((s,p)=>s+Number(p.val||0),0)+impMes.reduce((s,i)=>s+Number(i.val||0),0);
@@ -1040,7 +1047,7 @@ function renderDRE(){
   const mes=getMes();const[ano,m]=mes.split('-');
   document.getElementById('dre-per').textContent=MESES[Number(m)-1]+' '+ano;
   const rec=ERP.receber.filter(r=>r.comp===mes||r.venc?.slice(0,7)===mes);
-  const pag=ERP.pagar.filter(p=>p.venc?.slice(0,7)===mes);
+  const pag=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes);
   const imp=ERP.impostos.filter(i=>i.comp===mes);
   const movs=ERP.movimentos.filter(mv=>mv.comp===mes);
   const recBruta=rec.reduce((s,r)=>s+Number(r.val||0),0);
@@ -1125,11 +1132,26 @@ function _rateiosDoColab(c){
 }
 function _detalheRateioPorCliente(cliId){
   const linhas=[];
+  // v13: se a FOLHA REAL do mês está fechada, o custo por cliente vem dela
+  // (apontamentos verdadeiros + VT/VR do mês). Senão, usa a estimativa do cadastro.
+  const mesCC=getMes();
+  const folhaReal=(ERP.folhas||[]).find(f=>f.comp===mesCC&&f.fechada);
+  if(folhaReal){
+    folhaReal.itens.forEach(it=>{
+      const c=_fmCalcItem(it);
+      const rats=(it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}];
+      rats.forEach(r=>{
+        if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:it.nome+' 🧾',pct:Number(r.pct),val:c.custoTotal*Number(r.pct)/100});
+      });
+    });
+    return linhas;
+  }
   ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
     // v11: custo REAL por cliente = remuneração + FGTS 8% + provisões completas
     // (férias+1/3, 13º, rescisão, jurídico). Sem INSS patronal (Anexo IV).
     const remC=remCol(c)||0;
-    const custo=c.tipo==='CLT'?(remC*1.08+Number(c.provMes||((remC*1.333/12)+(remC/12)+(remC*0.5/12)+(remC*Number(ERP.config.jurPerc||5)/100)))):remC;
+    const benefC=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
+    const custo=(c.tipo==='CLT'?(remC*1.08+Number(c.provMes||((remC*1.333/12)+(remC/12)+(remC*0.5/12)+(remC*Number(ERP.config.jurPerc||5)/100)))):remC)+benefC;
     _rateiosDoColab(c).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:c.nome,pct:Number(r.pct),val:custo*Number(r.pct)/100});
     });
@@ -1150,8 +1172,8 @@ function _rateiosDoPagar(p){
 }
 function _detalheRateioPagarPorCliente(cliId,mes){
   const linhas=[];
-  ERP.pagar.filter(p=>p.venc?.slice(0,7)===mes).forEach(p=>{
-    if(p.estoque)return; // compra de estoque: o custo entra no CC pela SAÍDA de cada condomínio (evita contar 2x)
+  ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes).forEach(p=>{
+    if(p.estoque||p.folha)return; // estoque entra pela saída; folha entra pela mão de obra (evita contar 2x)
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc,pct:Number(r.pct),val:valor*Number(r.pct)/100});
@@ -1345,6 +1367,25 @@ function excluirVd(id){if(!confirm('Excluir?'))return;const vinculadas=ERP.receb
 
 // CONTAS A PAGAR
 let _rateiosPag=[];
+function ratearPagarPorEquipe(){
+  // Divide a despesa entre os contratos na proporção do VT/VR/benefícios
+  // médios (cadastro) de cada colaborador ativo, respeitando o rateio de cada um
+  const pesos={};let total=0;
+  ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
+    const ref=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
+    if(ref<=0)return;
+    _rateiosDoColab(c).forEach(r=>{
+      const chave=r.ccId||'';
+      const parte=ref*Number(r.pct||0)/100;
+      pesos[chave]=(pesos[chave]||0)+parte;total+=parte;
+    });
+  });
+  if(!total){alert('Nenhum colaborador ativo tem VT/VR médio preenchido no cadastro. Preencha lá primeiro (é a referência do rateio).');return;}
+  _rateiosPag=Object.entries(pesos).map(([ccId,v])=>({ccId,pct:Math.round(v/total*1000)/10}));
+  const soma=_rateiosPag.reduce((s,r)=>s+r.pct,0);
+  _rateiosPag[_rateiosPag.length-1].pct=Math.round((_rateiosPag[_rateiosPag.length-1].pct+(100-soma))*10)/10;
+  renderRateiosPag();
+}
 function renderRateiosPag(){
   document.getElementById('mpag-rateio-lista').innerHTML=_rateiosPag.length?_rateiosPag.map((r,i)=>`<div class="item-venda">
       <select style="flex:2;" onchange="_rateiosPag[${i}].ccId=this.value">
@@ -1371,7 +1412,7 @@ function abrirModalPagar(id){
   popCatSel('mpag-cat');const h=new Date();
   if(id){
     const p=ERP.pagar.find(x=>x.id===id);
-    document.getElementById('mpag-id').value=p.id;document.getElementById('mpag-desc').value=p.desc||'';document.getElementById('mpag-cat').value=p.catId||'';document.getElementById('mpag-val').value=p.val||'';document.getElementById('mpag-venc').value=p.venc||'';document.getElementById('mpag-rec').value=p.recorr||'unica';document.getElementById('mpag-st').value=p.st||'pendente';document.getElementById('mpag-dpag').value=p.dpag||'';document.getElementById('mpag-obs').value=p.obs||'';
+    document.getElementById('mpag-id').value=p.id;document.getElementById('mpag-desc').value=p.desc||'';document.getElementById('mpag-cat').value=p.catId||'';document.getElementById('mpag-val').value=p.val||'';document.getElementById('mpag-venc').value=p.venc||'';document.getElementById('mpag-comp').value=p.comp||'';document.getElementById('mpag-rec').value=p.recorr||'unica';document.getElementById('mpag-st').value=p.st||'pendente';document.getElementById('mpag-dpag').value=p.dpag||'';document.getElementById('mpag-obs').value=p.obs||'';
     // Compatibilidade: lançamentos antigos só tinham um ccId único — vira
     // automaticamente um rateio de 100% pra esse mesmo cliente.
     if(p.rateios&&p.rateios.length)_rateiosPag=p.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
@@ -1380,7 +1421,7 @@ function abrirModalPagar(id){
   }
   else{
     ['mpag-id','mpag-desc','mpag-val','mpag-dpag','mpag-obs'].forEach(x=>document.getElementById(x).value='');
-    document.getElementById('mpag-cat').value='';document.getElementById('mpag-venc').value=h.toISOString().slice(0,10);document.getElementById('mpag-rec').value='unica';document.getElementById('mpag-st').value='pendente';
+    document.getElementById('mpag-cat').value='';document.getElementById('mpag-venc').value=h.toISOString().slice(0,10);document.getElementById('mpag-comp').value='';document.getElementById('mpag-rec').value='unica';document.getElementById('mpag-st').value='pendente';
     _rateiosPag=[];
   }
   renderRateiosPag();abrirModal('modal-pag');
@@ -1393,7 +1434,7 @@ function salvarPagar(){
   const id=document.getElementById('mpag-id').value;const catId=document.getElementById('mpag-cat').value;const cat=ERP.categorias.find(c=>c.id===catId);
   const rateios=_rateiosPag.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
   const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
-  const obj={up:Date.now(),id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,ccId:principal?principal.ccId:'',rateios,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
+  const obj={up:Date.now(),id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,comp:document.getElementById('mpag-comp').value||'',ccId:principal?principal.ccId:'',rateios,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
   if(id){const i=ERP.pagar.findIndex(x=>x.id===id);ERP.pagar[i]=obj;}else ERP.pagar.push(obj);
   salvarERP();fm('modal-pag');renderPagar();renderDash();
 }
@@ -1444,8 +1485,8 @@ function renderFolha(){
   const tb=document.getElementById('tb-folha');const cols=ERP.colaboradores.filter(c=>c.ativo!==false);
   if(!cols.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:14px">Nenhum colaborador.</td></tr>';return;}
   let tC=0,tP=0;
-  tb.innerHTML=cols.map(col=>{const remF=remCol(col);tC+=col.custoTotal||remF;tP+=col.provMes||0;const ccNome=ERP.clientes.find(c=>c.id===col.ccId)?.nome||'ADM';
-    return`<tr><td><strong>${col.nome}</strong></td><td><span class="badge ${col.tipo==='CLT'?'b-blue':'b-orange'}">${col.tipo}</span></td><td>${fmt(remF)}${remF>Number(col.sal||0)?`<div style="font-size:10px;color:var(--text3)">base ${fmt(col.sal)}</div>`:''}</td><td>${col.tipo==='CLT'?fmt(remF*0.08):'—'}</td><td>${col.tipo==='CLT'?fmt(remF*0.20):'—'}</td><td><strong style="color:var(--red)">${fmt(col.custoTotal||remF)}</strong></td><td style="color:var(--purple)">${col.tipo==='CLT'?fmt(remF*1.333/12):'—'}</td><td style="color:var(--purple)">${col.tipo==='CLT'?fmt(remF/12):'—'}</td><td>${ccNome}</td></tr>`;
+  tb.innerHTML=cols.map(col=>{const remF=remCol(col);const benefF=Number(col.vt||0)+Number(col.vr||0)+Number(col.benef||0);const custoF=(col.tipo==='CLT'?remF*1.08:remF)+benefF;tC+=custoF;tP+=col.provMes||0;const ccNome=ERP.clientes.find(c=>c.id===col.ccId)?.nome||'ADM';
+    return`<tr><td><strong>${col.nome}</strong></td><td><span class="badge ${col.tipo==='CLT'?'b-blue':'b-orange'}">${col.tipo}</span></td><td>${fmt(remF)}${remF>Number(col.sal||0)?`<div style="font-size:10px;color:var(--text3)">base ${fmt(col.sal)}</div>`:''}</td><td>${col.tipo==='CLT'?fmt(remF*0.08):'—'}</td><td>${benefF?fmt(benefF):'—'}</td><td><strong style="color:var(--red)">${fmt(custoF)}</strong></td><td style="color:var(--purple)">${col.tipo==='CLT'?fmt(remF*1.333/12):'—'}</td><td style="color:var(--purple)">${col.tipo==='CLT'?fmt(remF/12):'—'}</td><td>${ccNome}</td></tr>`;
   }).join('')+`<tr style="background:var(--bg);font-weight:700;"><td colspan="5">TOTAIS</td><td style="color:var(--red)">${fmt(tC)}</td><td colspan="2" style="color:var(--purple)">Prov: ${fmt(tP)}/mês</td><td></td></tr>`;
 }
 
@@ -1702,13 +1743,13 @@ async function limparDadosReceber(){
 
 // COLABORADORES
 let _rateiosCol=[];
-function _lerAdicCol(){const g=x=>Number(document.getElementById(x)?.value||0);return{sal:g('mco-sal'),he:g('mco-he'),adnot:g('mco-adnot'),insal:g('mco-insal'),peric:g('mco-peric'),outros:g('mco-outros')};}
+function _lerAdicCol(){const g=x=>Number(document.getElementById(x)?.value||0);return{sal:g('mco-sal'),he:g('mco-he'),adnot:g('mco-adnot'),insal:g('mco-insal'),peric:g('mco-peric'),outros:g('mco-outros'),vt:g('mco-vt'),vr:g('mco-vr'),benef:g('mco-benef')};}
 function remCol(c){if(!c)return 0;if(c.rem!=null)return Number(c.rem)||0;return Number(c.sal||0)+Number(c.he||0)+Number(c.adnot||0)+Number(c.insal||0)+Number(c.peric||0)+Number(c.outros||0);}
 function calcCustoCol(){
   const a=_lerAdicCol();const sal=a.sal+a.he+a.adnot+a.insal+a.peric+a.outros;const tipo=document.getElementById('mco-tipo')?.value;
   const remEl=document.getElementById('mco-rem');if(remEl)remEl.value=fmt(sal);
-  if(tipo==='CLT'){const f=sal*0.08,n=0,c=sal+f+n,pf=sal*1.333/12,pd=sal/12,pr=sal*0.5/12,pj=sal*Number(ERP.config.jurPerc||5)/100,pt=pf+pd+pr+pj;document.getElementById('mco-fgts').value=fmt(f);document.getElementById('mco-inss').value=fmt(n);document.getElementById('mco-total').value=fmt(c);document.getElementById('mco-pf').value=fmt(pf);document.getElementById('mco-p13').value=fmt(pd);document.getElementById('mco-pres').value=fmt(pr+pj);document.getElementById('mco-ptot').value=fmt(pt);document.getElementById('mco-clt-box').style.display='block';}
-  else{document.getElementById('mco-total').value=fmt(sal);document.getElementById('mco-clt-box').style.display='none';}
+  const benefT=a.vt+a.vr+a.benef;if(tipo==='CLT'){const f=sal*0.08,n=0,c=sal+f+n+benefT,pf=sal*1.333/12,pd=sal/12,pr=sal*0.5/12,pj=sal*Number(ERP.config.jurPerc||5)/100,pt=pf+pd+pr+pj;document.getElementById('mco-fgts').value=fmt(f);document.getElementById('mco-inss').value=fmt(n);document.getElementById('mco-total').value=fmt(c);document.getElementById('mco-pf').value=fmt(pf);document.getElementById('mco-p13').value=fmt(pd);document.getElementById('mco-pres').value=fmt(pr+pj);document.getElementById('mco-ptot').value=fmt(pt);document.getElementById('mco-clt-box').style.display='block';}
+  else{document.getElementById('mco-total').value=fmt(sal+benefT);document.getElementById('mco-clt-box').style.display='none';}
 }
 function renderRateiosCol(){
   document.getElementById('mco-rateio-lista').innerHTML=_rateiosCol.length?_rateiosCol.map((r,i)=>`<div class="item-venda">
@@ -1735,7 +1776,7 @@ function addRateioCol(){
 function abrirModalColab(id){
   if(id){
     const c=ERP.colaboradores.find(x=>x.id===id);
-    document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-he').value=c.he||'';document.getElementById('mco-adnot').value=c.adnot||'';document.getElementById('mco-insal').value=c.insal||'';document.getElementById('mco-peric').value=c.peric||'';document.getElementById('mco-outros').value=c.outros||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';
+    document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-he').value=c.he||'';document.getElementById('mco-adnot').value=c.adnot||'';document.getElementById('mco-insal').value=c.insal||'';document.getElementById('mco-peric').value=c.peric||'';document.getElementById('mco-outros').value=c.outros||'';document.getElementById('mco-vt').value=c.vt||'';document.getElementById('mco-vr').value=c.vr||'';document.getElementById('mco-benef').value=c.benef||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';
     // Compatibilidade: colaboradores antigos só tinham um ccId único — isso
     // vira automaticamente um rateio de 100% pra esse mesmo cliente.
     if(c.rateios&&c.rateios.length)_rateiosCol=c.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
@@ -1743,7 +1784,7 @@ function abrirModalColab(id){
     else _rateiosCol=[];
   }
   else{
-    ['mco-id','mco-nome','mco-cpf','mco-sal','mco-he','mco-adnot','mco-insal','mco-peric','mco-outros','mco-pix','mco-banco'].forEach(x=>document.getElementById(x).value='');
+    ['mco-id','mco-nome','mco-cpf','mco-sal','mco-he','mco-adnot','mco-insal','mco-peric','mco-outros','mco-vt','mco-vr','mco-benef','mco-pix','mco-banco'].forEach(x=>document.getElementById(x).value='');
     document.getElementById('mco-tipo').value='CLT';document.getElementById('mco-func').value='ASG';
     _rateiosCol=[];
   }
@@ -1761,7 +1802,7 @@ function salvarColab(){
   // ccId principal = maior fatia do rateio (mantém compatibilidade com a
   // Folha, que continua gerando um único lançamento por colaborador).
   const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
-  const obj={up:Date.now(),id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,he:a.he,adnot:a.adnot,insal:a.insal,peric:a.peric,outros:a.outros,rem,fgts:tipo==='CLT'?rem*0.08:0,inss:0,custoTotal:tipo==='CLT'?rem*1.08:rem,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:principal?principal.ccId:'',rateios,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true,up:Date.now()};
+  const obj={up:Date.now(),id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,he:a.he,adnot:a.adnot,insal:a.insal,peric:a.peric,outros:a.outros,rem,vt:a.vt,vr:a.vr,benef:a.benef,fgts:tipo==='CLT'?rem*0.08:0,inss:0,custoTotal:(tipo==='CLT'?rem*1.08:rem)+a.vt+a.vr+a.benef,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:principal?principal.ccId:'',rateios,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true,up:Date.now()};
   if(id){const i=ERP.colaboradores.findIndex(x=>x.id===id);ERP.colaboradores[i]=obj;}else ERP.colaboradores.push(obj);
   salvarERP();fm('modal-col');renderColabs();
 }
@@ -1830,6 +1871,7 @@ function abrirModalRecibo(tipo){
 let _fmItens=[];
 function _fmCalcItem(it){
   const proventos=Number(it.base||0)+Number(it.he||0)+Number(it.not||0)+Number(it.insal||0)+Number(it.peric||0)+Number(it.dsr||0)+Number(it.outros||0);
+  const benef=0; // v14: VT/VR entram pelo lançamento da COMPRA (rateio pela equipe), não pela folha
   const liquidoAuto=proventos-Number(it.descs||0);
   const remProv=proventos; // provisões e FGTS sobre a remuneração bruta do mês
   const clt=it.tipo==='CLT';
@@ -1838,7 +1880,7 @@ function _fmCalcItem(it){
   const pDec=clt?remProv/12:0;
   const pResc=clt?remProv*0.5/12:0;
   const pJur=clt?remProv*Number(ERP.config.jurPerc||5)/100:0;
-  return {proventos,liquidoAuto,fgts,pFer,pDec,pResc,pJur,provTot:pFer+pDec+pResc+pJur,custoTotal:proventos+fgts+pFer+pDec+pResc+pJur};
+  return {proventos,benef,liquidoAuto,fgts,pFer,pDec,pResc,pJur,provTot:pFer+pDec+pResc+pJur,custoTotal:proventos+benef+fgts+pFer+pDec+pResc+pJur};
 }
 function _fmAtualizarLinha(i){
   const c=_fmCalcItem(_fmItens[i]);
@@ -1855,6 +1897,7 @@ function _fmTotais(){
   let t={prov:0,liq:0,fgts:0,fer:0,dec:0,resc:0,jur:0,provT:0,cust:0};
   _fmItens.forEach(it=>{const c=_fmCalcItem(it);
     t.prov+=c.proventos;t.liq+=(it._liqManual&&it.liquido!=null)?Number(it.liquido):c.liquidoAuto;
+    t.benef=(t.benef||0)+c.benef;
     t.fgts+=c.fgts;t.fer+=c.pFer;t.dec+=c.pDec;t.resc+=c.pResc;t.jur+=c.pJur;t.provT+=c.provTot;t.cust+=c.custoTotal;});
   const el=document.getElementById('fm-provisoes');
   if(el)el.innerHTML=`<div class="card">
@@ -1867,7 +1910,7 @@ function _fmTotais(){
       <div style="background:var(--purple);border-radius:8px;padding:10px;color:#fff;"><div style="font-size:11px;opacity:.85;">TOTAL PROVISÃO</div><div style="font-weight:800;font-size:16px;">${fmt(t.provT)}</div></div>
     </div>
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:12px;font-weight:700;">
-      <span>Proventos: ${fmt(t.prov)}</span><span>Líquido a pagar: ${fmt(t.liq)}</span><span>FGTS: ${fmt(t.fgts)}</span><span style="color:var(--red);">CUSTO TOTAL DO MÊS: ${fmt(t.cust)}</span>
+      <span>Proventos: ${fmt(t.prov)}</span><span>Líquido: ${fmt(t.liq)}</span><span>FGTS: ${fmt(t.fgts)}</span><span style="color:var(--red);">CUSTO TOTAL DO MÊS: ${fmt(t.cust)}</span>
     </div>
   </div>`;
 }
@@ -1931,8 +1974,9 @@ function fecharFolhaMes(){
     const c=_fmCalcItem(it);
     const liq=(it._liqManual&&it.liquido!=null)?Number(it.liquido):c.liquidoAuto;
     const rat=(it.rateios&&it.rateios.length)?it.rateios:undefined;
-    if(liq>0)ERP.pagar.push({up:Date.now(),id:gid(),desc:`Salário — ${it.nome} (${it.tipo}) · folha real`,catNome:it.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:Math.round(liq*100)/100,venc:mes+'-05',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:mes});
-    if(c.fgts>0)ERP.pagar.push({up:Date.now(),id:gid(),desc:`FGTS — ${it.nome} · folha real`,catNome:'Encargos FGTS',val:Math.round(c.fgts*100)/100,venc:mes+'-07',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:mes});
+    if(liq>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,desc:`Salário — ${it.nome} (${it.tipo}) · folha real`,catNome:it.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:Math.round(liq*100)/100,venc:mes+'-05',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:mes});
+    if(c.fgts>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,desc:`FGTS — ${it.nome} · folha real`,catNome:'Encargos FGTS',val:Math.round(c.fgts*100)/100,venc:mes+'-07',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:mes});
+    // v14: VT/VR não são gerados pela folha — o custo entra pela compra rateada
   });
   salvarERP();renderFolhaMes();
   alert('✅ Folha fechada! Contas geradas em Contas a Pagar. Não esqueça de transferir o TOTAL PROVISÃO para a conta virtual Provisão RH.');
@@ -1948,7 +1992,7 @@ function imprimirFolhaMes(){
   if(!_fmItens.length)return;
   let linhas='',t={prov:0,liq:0,fgts:0,provT:0,cust:0,fer:0,dec:0,resc:0,jur:0};
   _fmItens.forEach(it=>{const c=_fmCalcItem(it);const liq=(it._liqManual&&it.liquido!=null)?Number(it.liquido):c.liquidoAuto;
-    t.prov+=c.proventos;t.liq+=liq;t.fgts+=c.fgts;t.provT+=c.provTot;t.cust+=c.custoTotal;t.fer+=c.pFer;t.dec+=c.pDec;t.resc+=c.pResc;t.jur+=c.pJur;
+    t.prov+=c.proventos;t.liq+=liq;t.fgts+=c.fgts;t.benef=(t.benef||0)+c.benef;t.provT+=c.provTot;t.cust+=c.custoTotal;t.fer+=c.pFer;t.dec+=c.pDec;t.resc+=c.pResc;t.jur+=c.pJur;
     linhas+=`<tr><td><strong>${it.nome}</strong><br><span style="font-size:9px;color:#666">${it.tipo} · ${it.func||''}</span></td>
       <td class="dir">${fmt(it.base)}</td><td class="dir">${fmt(Number(it.he||0)+Number(it.not||0)+Number(it.insal||0)+Number(it.peric||0)+Number(it.dsr||0)+Number(it.outros||0))}</td>
       <td class="dir">(${fmt(it.descs)})</td><td class="dir"><strong>${fmt(c.proventos)}</strong></td><td class="dir">${fmt(liq)}</td>
@@ -2004,7 +2048,7 @@ function relDRE(){
   const ret=ERP.impostos.filter(i=>i.comp===mes&&i.ret==='sim').reduce((s,i)=>s+Number(i.val||0),0);
   const das=receita*Number(ERP.config.aliq||4.5)/100;
   const impostos=ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').reduce((s,i)=>s+Number(i.val||0),0);
-  const despesas=ERP.pagar.filter(p=>p.venc?.slice(0,7)===mes&&!p.estoque).reduce((s,p)=>s+Number(p.val||0),0);
+  const despesas=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes&&!p.estoque).reduce((s,p)=>s+Number(p.val||0),0);
   const material=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes).reduce((s,m)=>s+Number(m.custoTotal||0),0);
   const provisoes=ERP.colaboradores.filter(c=>c.ativo!==false&&c.tipo==='CLT').reduce((s,c)=>s+Number(c.provMes||0),0);
   const resultado=receita-ret-das-despesas-impostos-material;
@@ -2069,7 +2113,7 @@ function relEvolucao(){
     const m=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     const fat=ERP.receber.filter(r=>(r.comp===m||r.venc?.slice(0,7)===m)).reduce((s,r)=>s+Number(r.val||0),0)+ERP.vendas.filter(v=>(v.data||'').slice(0,7)===m).reduce((s,v)=>s+Number(v.val||0),0);
     const rec=ERP.receber.filter(r=>r.st==='recebido'&&(r.drec||r.venc||'').slice(0,7)===m).reduce((s,r)=>s+Number(r.val||0),0);
-    const desp=ERP.pagar.filter(p=>p.venc?.slice(0,7)===m&&!p.estoque).reduce((s,p)=>s+Number(p.val||0),0)+ERP.impostos.filter(x=>x.comp===m&&x.ret!=='sim').reduce((s,x)=>s+Number(x.val||0),0);
+    const desp=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===m&&!p.estoque).reduce((s,p)=>s+Number(p.val||0),0)+ERP.impostos.filter(x=>x.comp===m&&x.ret!=='sim').reduce((s,x)=>s+Number(x.val||0),0);
     t.fat+=fat;t.rec+=rec;t.desp+=desp;
     const res=fat-fat*Number(ERP.config.aliq||4.5)/100-desp;
     linhas+=`<tr><td>${MESES[d.getMonth()]} ${d.getFullYear()}</td><td class="dir">${fmt(fat)}</td><td class="dir">${fmt(rec)}</td><td class="dir neg">(${fmt(desp)})</td><td class="dir ${res>=0?'pos':'neg'}"><strong>${fmt(res)}</strong></td></tr>`;
@@ -2093,14 +2137,15 @@ function relFolhaProv(){
   let linhas='',t={rem:0,fgts:0,prov:0,custo:0};
   ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
     const rem=remCol(c);const fgts=c.tipo==='CLT'?rem*0.08:0;const prov=c.tipo==='CLT'?Number(c.provMes||0):0;
-    const custo=Number(c.custoTotal||rem);
-    t.rem+=rem;t.fgts+=fgts;t.prov+=prov;t.custo+=custo;
-    linhas+=`<tr><td><strong>${c.nome}</strong></td><td>${c.tipo}</td><td>${c.func||'—'}</td><td class="dir">${fmt(rem)}</td><td class="dir">${fgts?fmt(fgts):'—'}</td><td class="dir">${prov?fmt(prov):'—'}</td><td class="dir"><strong>${fmt(custo)}</strong></td></tr>`;
+    const benefR=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
+    const custo=(c.tipo==='CLT'?rem*1.08:rem)+benefR+prov;
+    t.rem+=rem;t.fgts+=fgts;t.benef=(t.benef||0)+benefR;t.prov+=prov;t.custo+=custo;
+    linhas+=`<tr><td><strong>${c.nome}</strong></td><td>${c.tipo}</td><td>${c.func||'—'}</td><td class="dir">${fmt(rem)}</td><td class="dir">${fgts?fmt(fgts):'—'}</td><td class="dir">${benefR?fmt(benefR):'—'}</td><td class="dir">${prov?fmt(prov):'—'}</td><td class="dir"><strong>${fmt(custo)}</strong></td></tr>`;
   });
   const corpo=`<h2>Folha, Encargos e Provisões</h2>
-  <table><thead><tr><th>Colaborador</th><th>Vínculo</th><th>Função</th><th class="dir">Remuneração</th><th class="dir">FGTS</th><th class="dir">Provisões/mês</th><th class="dir">Custo total</th></tr></thead>
+  <table><thead><tr><th>Colaborador</th><th>Vínculo</th><th>Função</th><th class="dir">Remuneração</th><th class="dir">FGTS</th><th class="dir">Benefícios</th><th class="dir">Provisões/mês</th><th class="dir">Custo total</th></tr></thead>
   <tbody>${linhas||'<tr><td colspan="7" style="text-align:center;color:#777;">Nenhum colaborador ativo</td></tr>'}
-  <tr class="tot"><td colspan="3">TOTAL</td><td class="dir">${fmt(t.rem)}</td><td class="dir">${fmt(t.fgts)}</td><td class="dir">${fmt(t.prov)}</td><td class="dir">${fmt(t.custo)}</td></tr></tbody></table>
+  <tr class="tot"><td colspan="3">TOTAL</td><td class="dir">${fmt(t.rem)}</td><td class="dir">${fmt(t.fgts)}</td><td class="dir">${fmt(t.benef||0)}</td><td class="dir">${fmt(t.prov)}</td><td class="dir">${fmt(t.custo)}</td></tr></tbody></table>
   <p class="peq">Remuneração = salário-base + adicionais habituais. Provisões: férias+1/3, 13º, rescisão e contingência jurídica. Documento gerencial — não substitui a folha contábil.</p>`;
   _abrirRelatorio('Folha & Provisões',corpo,_mesLabel(mes));
 }

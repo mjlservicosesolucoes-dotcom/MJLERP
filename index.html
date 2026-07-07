@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v14</title>
+<title>MJL ERP Financeiro v15</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -623,7 +623,8 @@ tr:hover td{background:#fafbff;}
     <div style="background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <label style="font-size:11px;font-weight:700;color:var(--text2);">CENTRO DE CUSTO (RATEIO POR %)</label>
-        <div style="display:flex;gap:6px;"><button class="btn btn-ghost btn-sm" onclick="ratearPagarPorEquipe()">⚖️ Ratear pela equipe (VT/VR)</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" onclick="ratearGuiaPelaFolha()">🏛️ Ratear guia pela folha</button>
+        <button class="btn btn-ghost btn-sm" onclick="ratearPagarPorEquipe()">⚖️ Ratear pela equipe (VT/VR)</button>
         <button class="btn btn-ghost btn-sm" onclick="addRateioPag()">+ Cliente</button></div>
       </div>
       <div id="mpag-rateio-lista"></div>
@@ -1141,7 +1142,7 @@ function _detalheRateioPorCliente(cliId){
       const c=_fmCalcItem(it);
       const rats=(it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}];
       rats.forEach(r=>{
-        if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:it.nome+' 🧾',pct:Number(r.pct),val:c.custoTotal*Number(r.pct)/100});
+        if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:it.nome+' 🧾',pct:Number(r.pct),val:(c.proventos+c.provTot)*Number(r.pct)/100});
       });
     });
     return linhas;
@@ -1367,6 +1368,33 @@ function excluirVd(id){if(!confirm('Excluir?'))return;const vinculadas=ERP.receb
 
 // CONTAS A PAGAR
 let _rateiosPag=[];
+function ratearGuiaPelaFolha(){
+  // Divide a GUIA (FGTS/INSS) entre os contratos na proporção da remuneração
+  // de cada colaborador — usa a FOLHA REAL do mês de competência (se fechada),
+  // senão a estimativa do cadastro. Respeita o rateio de cada colaborador.
+  const comp=document.getElementById('mpag-comp').value||document.getElementById('mpag-venc').value?.slice(0,7)||getMes();
+  const pesos={};let total=0;
+  const folha=(ERP.folhas||[]).find(f=>f.comp===comp&&f.fechada);
+  if(folha){
+    folha.itens.forEach(it=>{
+      const c=_fmCalcItem(it);
+      if(c.proventos<=0)return;
+      const rats=(it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}];
+      rats.forEach(r=>{const k=r.ccId||'';const parte=c.proventos*Number(r.pct||0)/100;pesos[k]=(pesos[k]||0)+parte;total+=parte;});
+    });
+  }else{
+    ERP.colaboradores.filter(c=>c.ativo!==false&&c.tipo==='CLT').forEach(c=>{
+      const rem=remCol(c);if(rem<=0)return;
+      _rateiosDoColab(c).forEach(r=>{const k=r.ccId||'';const parte=rem*Number(r.pct||0)/100;pesos[k]=(pesos[k]||0)+parte;total+=parte;});
+    });
+  }
+  if(!total){alert('Não encontrei base de folha para a competência '+comp+'. Feche a Folha do Mês (real) ou confira o cadastro dos colaboradores.');return;}
+  _rateiosPag=Object.entries(pesos).map(([ccId,v])=>({ccId,pct:Math.round(v/total*1000)/10}));
+  const soma=_rateiosPag.reduce((s,r)=>s+r.pct,0);
+  _rateiosPag[_rateiosPag.length-1].pct=Math.round((_rateiosPag[_rateiosPag.length-1].pct+(100-soma))*10)/10;
+  renderRateiosPag();
+  alert('⚖️ Guia rateada pela '+(folha?'FOLHA REAL':'estimativa do cadastro')+' de '+comp+'. Confira os percentuais e salve.');
+}
 function ratearPagarPorEquipe(){
   // Divide a despesa entre os contratos na proporção do VT/VR/benefícios
   // médios (cadastro) de cada colaborador ativo, respeitando o rateio de cada um
@@ -1975,11 +2003,12 @@ function fecharFolhaMes(){
     const liq=(it._liqManual&&it.liquido!=null)?Number(it.liquido):c.liquidoAuto;
     const rat=(it.rateios&&it.rateios.length)?it.rateios:undefined;
     if(liq>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,desc:`Salário — ${it.nome} (${it.tipo}) · folha real`,catNome:it.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:Math.round(liq*100)/100,venc:mes+'-05',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:mes});
-    if(c.fgts>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,desc:`FGTS — ${it.nome} · folha real`,catNome:'Encargos FGTS',val:Math.round(c.fgts*100)/100,venc:mes+'-07',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:mes});
+    // v15: FGTS/INSS entram pela GUIA lançada em Contas a Pagar
+    // (botão "🏛️ Ratear guia pela folha" divide entre os contratos)
     // v14: VT/VR não são gerados pela folha — o custo entra pela compra rateada
   });
   salvarERP();renderFolhaMes();
-  alert('✅ Folha fechada! Contas geradas em Contas a Pagar. Não esqueça de transferir o TOTAL PROVISÃO para a conta virtual Provisão RH.');
+  alert('✅ Folha fechada! Salários gerados em Contas a Pagar.\n\n📌 Quando as GUIAS chegarem (FGTS/INSS), lance cada uma em Contas a Pagar e use o botão 🏛️ Ratear guia pela folha.\n💜 E transfira o TOTAL PROVISÃO para a conta virtual Provisão RH.');
 }
 function reabrirFolhaMes(){
   const mes=getMes();

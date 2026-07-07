@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v15</title>
+<title>MJL ERP Financeiro v16</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1140,7 +1140,13 @@ function _detalheRateioPorCliente(cliId){
   if(folhaReal){
     folhaReal.itens.forEach(it=>{
       const c=_fmCalcItem(it);
-      const rats=(it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}];
+      // v16: a DIVISÃO entre contratos vem sempre do CADASTRO ATUAL do
+      // colaborador (mudou o cadastro → a rentabilidade acompanha).
+      // A folha continua sendo a fonte dos VALORES do mês.
+      const cad=ERP.colaboradores.find(x=>x.id===it.colabId);
+      const rats=(cad&&cad.rateios&&cad.rateios.length)?cad.rateios
+        :((cad&&cad.ccId)?[{ccId:cad.ccId,pct:100}]
+        :((it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}]));
       rats.forEach(r=>{
         if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:it.nome+' 🧾',pct:Number(r.pct),val:(c.proventos+c.provTot)*Number(r.pct)/100});
       });
@@ -1379,7 +1385,10 @@ function ratearGuiaPelaFolha(){
     folha.itens.forEach(it=>{
       const c=_fmCalcItem(it);
       if(c.proventos<=0)return;
-      const rats=(it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}];
+      const cad=ERP.colaboradores.find(x=>x.id===it.colabId);
+      const rats=(cad&&cad.rateios&&cad.rateios.length)?cad.rateios
+        :((cad&&cad.ccId)?[{ccId:cad.ccId,pct:100}]
+        :((it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}]));
       rats.forEach(r=>{const k=r.ccId||'';const parte=c.proventos*Number(r.pct||0)/100;pesos[k]=(pesos[k]||0)+parte;total+=parte;});
     });
   }else{

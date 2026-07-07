@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v16</title>
+<title>MJL ERP Financeiro v17</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -141,6 +141,7 @@ tr:hover td{background:#fafbff;}
     <a class="nav-link" data-page="folhames">🧾 Folha do Mês (real)</a>
     <a class="nav-link" data-page="impostos">🏛️ Impostos</a>
     <a class="nav-link" data-page="almox">📦 Almoxarifado</a>
+    <a class="nav-link" data-page="licit">🏛️ Licitações</a>
     <div class="menu-sec">Provisões</div>
     <a class="nav-link" data-page="provisoes">🏦 Contas Virtuais</a>
     <a class="nav-link" data-page="prov-colab">📋 Provisão RH</a>
@@ -245,6 +246,19 @@ tr:hover td{background:#fafbff;}
     </div>
 
     <!-- VENDAS AVULSAS -->
+    <div class="page" id="page-licit">
+      <div id="lic-kpis" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 8px;flex-wrap:wrap;gap:8px;">
+        <h3 style="font-size:14px;margin:0;">📜 Certidões e Documentos de Habilitação</h3>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalCertidao()">+ Certidão</button>
+      </div>
+      <div id="lic-certidoes"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px;flex-wrap:wrap;gap:8px;">
+        <h3 style="font-size:14px;margin:0;">🧮 Planilhas de Composição de Custos (IN 05/2017)</h3>
+        <button class="btn btn-green btn-sm" onclick="abrirModalPlanCusto()">+ Planilha de Custos</button>
+      </div>
+      <div id="lic-planilhas"></div>
+    </div>
     <div class="page" id="page-almox">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         <button class="btn btn-green" onclick="abrirModalEntrada()">⬇️ Entrada (compra)</button>
@@ -637,6 +651,61 @@ tr:hover td{background:#fafbff;}
   </div>
 </div></div>
 
+<div id="modal-cert" class="modal-overlay hidden"><div class="modal">
+  <div class="modal-hdr"><h3 id="mce-titulo">Nova Certidão</h3><button class="modal-cls" onclick="fm('modal-cert')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mce-id">
+    <div class="fg"><label>Documento *</label><input id="mce-nome" placeholder="Ex: CND Federal (RFB/PGFN)" list="mce-sugestoes">
+    <datalist id="mce-sugestoes">
+      <option value="CND Federal (RFB/PGFN)"><option value="CRF — Regularidade do FGTS (Caixa)"><option value="CNDT — Débitos Trabalhistas (TST)">
+      <option value="CND Estadual (RJ)"><option value="CND Municipal (Rio de Janeiro)"><option value="Certidão de Falência e Concordata">
+      <option value="Balanço Patrimonial"><option value="Atestado de Capacidade Técnica"><option value="Contrato Social / Última Alteração"><option value="Alvará de Funcionamento">
+    </datalist></div>
+    <div class="fr"><div class="fg"><label>Nº / Código de controle</label><input id="mce-num"></div><div class="fg"><label>Órgão emissor</label><input id="mce-orgao"></div></div>
+    <div class="fr"><div class="fg"><label>Emissão</label><input type="date" id="mce-emissao"></div><div class="fg"><label>Validade *</label><input type="date" id="mce-val"></div></div>
+    <div class="fg"><label>Observações / link</label><input id="mce-obs"></div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1" onclick="salvarCertidao()">Salvar</button><button class="btn btn-ghost" onclick="fm('modal-cert')">Cancelar</button></div>
+  </div>
+</div></div>
+<div id="modal-plc" class="modal-overlay hidden"><div class="modal" style="max-width:680px;">
+  <div class="modal-hdr"><h3 id="mplc-titulo">Planilha de Composição de Custos</h3><button class="modal-cls" onclick="fm('modal-plc')">×</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mplc-id">
+    <div class="fr"><div class="fg"><label>Função / Posto *</label><input id="mplc-funcao" placeholder="Ex: Auxiliar de Serviços Gerais"></div><div class="fg"><label>Escala / Jornada</label><input id="mplc-escala" placeholder="Ex: 44h — 6x1"></div></div>
+    <div style="font-size:11px;font-weight:800;color:var(--text2);margin:4px 0 6px;">MÓDULO 1 — REMUNERAÇÃO</div>
+    <div class="fr3">
+      <div class="fg"><label>Salário-base (CCT)</label><input type="number" id="mplc-sal" step="0.01" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Adicionais (HE/not./insal.)</label><input type="number" id="mplc-adic" step="0.01" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Outros proventos</label><input type="number" id="mplc-outros" step="0.01" oninput="calcPlanCusto()"></div>
+    </div>
+    <div style="font-size:11px;font-weight:800;color:var(--text2);margin:4px 0 6px;">MÓDULO 2 — ENCARGOS E BENEFÍCIOS (encargos automáticos: 13º 8,33% · Férias+1/3 11,11% · FGTS 8% · Multa FGTS 3,2%)</div>
+    <div class="fr3">
+      <div class="fg"><label>VT líquido (R$/mês)</label><input type="number" id="mplc-vt" step="0.01" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>VR/VA (R$/mês)</label><input type="number" id="mplc-vr" step="0.01" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Outros benefícios</label><input type="number" id="mplc-benef" step="0.01" oninput="calcPlanCusto()"></div>
+    </div>
+    <div style="font-size:11px;font-weight:800;color:var(--text2);margin:4px 0 6px;">MÓDULOS 3 e 4 — RESCISÃO E REPOSIÇÃO</div>
+    <div class="fr3">
+      <div class="fg"><label>Rescisão % (padrão 4,17)</label><input type="number" id="mplc-resc" step="0.01" value="4.17" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Contingência jurídica %</label><input type="number" id="mplc-jur" step="0.01" value="5" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Reposição de ausências %</label><input type="number" id="mplc-repo" step="0.01" value="0" oninput="calcPlanCusto()"></div>
+    </div>
+    <div style="font-size:11px;font-weight:800;color:var(--text2);margin:4px 0 6px;">MÓDULO 5 — INSUMOS</div>
+    <div class="fr3">
+      <div class="fg"><label>Uniformes/EPIs (R$/mês)</label><input type="number" id="mplc-unif" step="0.01" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Materiais (R$/mês)</label><input type="number" id="mplc-mat" step="0.01" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Equipamentos (R$/mês)</label><input type="number" id="mplc-equip" step="0.01" oninput="calcPlanCusto()"></div>
+    </div>
+    <div style="font-size:11px;font-weight:800;color:var(--text2);margin:4px 0 6px;">MÓDULO 6 — CUSTOS INDIRETOS, LUCRO E TRIBUTOS</div>
+    <div class="fr3">
+      <div class="fg"><label>Custos indiretos % (adm)</label><input type="number" id="mplc-ci" step="0.01" value="5" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Lucro %</label><input type="number" id="mplc-lucro" step="0.01" value="10" oninput="calcPlanCusto()"></div>
+      <div class="fg"><label>Tributos % (por dentro)</label><input type="number" id="mplc-trib" step="0.01" value="4.5" oninput="calcPlanCusto()"></div>
+    </div>
+    <div id="mplc-resumo" style="background:var(--bg);border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;"></div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1" onclick="salvarPlanCusto(false)">Salvar</button><button class="btn btn-green" style="flex:1" onclick="salvarPlanCusto(true)">💾 Salvar e 🖨️ Gerar</button><button class="btn btn-ghost" onclick="fm('modal-plc')">Cancelar</button></div>
+  </div>
+</div></div>
 <div id="modal-prod" class="modal-overlay hidden"><div class="modal">
   <div class="modal-hdr"><h3 id="mpd-titulo">Novo Produto</h3><button class="modal-cls" onclick="fm('modal-prod')">×</button></div>
   <div class="modal-body">
@@ -828,8 +897,8 @@ tr:hover td{background:#fafbff;}
 
 <script>
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:4.5,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[],propostas:[],produtos:[],estoqueMov:[],folhas:[]};
-const CATS_SYNC=['clientes','colaboradores','servicos','categorias','receber','pagar','impostos','vendas','contas','movimentos','recibos','propostas','produtos','estoqueMov','folhas'];
+let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:4.5,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[],propostas:[],produtos:[],estoqueMov:[],folhas:[],certidoes:[],planilhasCusto:[]};
+const CATS_SYNC=['clientes','colaboradores','servicos','categorias','receber','pagar','impostos','vendas','contas','movimentos','recibos','propostas','produtos','estoqueMov','folhas','certidoes','planilhasCusto'];
 let _syncDebounceTimer=null;
 var _pendenteEnvio=false;
 function salvarERP(){
@@ -976,8 +1045,8 @@ function vencStatus(dt,st){
   if(d<=5)return{cls:'tr-breve',badge:`<span class="alerta-v breve">⏰ ${d}d</span>`};
   return{cls:'',badge:''};
 }
-const TITLES={dashboard:'Dashboard',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',relatorios:'Central de Relatórios',receber:'Contas a Receber',vendas:'Vendas / Avulsos',propostas:'Propostas Comerciais',pagar:'Contas a Pagar',folha:'Folha & Encargos',folhames:'Folha do Mês — Apontamentos Reais',impostos:'Impostos',almox:'Almoxarifado & EPI',provisoes:'Contas Virtuais','prov-colab':'Provisão RH',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',servicos:'Serviços',categorias:'Categorias',recibos:'Recibos',config:'Configurações'};
-const NOVO_FNS={clientes:()=>abrirModalCliente(),colaboradores:()=>abrirModalColab(),servicos:()=>abrirModalServico(),categorias:()=>abrirModalCat(),receber:()=>abrirModalReceber(),pagar:()=>abrirModalPagar(),impostos:()=>abrirModalImposto(),almox:()=>abrirModalProduto(),provisoes:()=>abrirModalConta(),vendas:()=>abrirModalVenda(),propostas:()=>abrirModalProposta()};
+const TITLES={dashboard:'Dashboard',dre:'DRE Gerencial',fluxo:'Fluxo de Caixa',centrocusto:'Centro de Custo',relatorios:'Central de Relatórios',receber:'Contas a Receber',vendas:'Vendas / Avulsos',propostas:'Propostas Comerciais',pagar:'Contas a Pagar',folha:'Folha & Encargos',folhames:'Folha do Mês — Apontamentos Reais',impostos:'Impostos',almox:'Almoxarifado & EPI',licit:'Licitações — Certidões & Formação de Preços',provisoes:'Contas Virtuais','prov-colab':'Provisão RH',clientes:'Clientes & Contratos',colaboradores:'Colaboradores',servicos:'Serviços',categorias:'Categorias',recibos:'Recibos',config:'Configurações'};
+const NOVO_FNS={clientes:()=>abrirModalCliente(),colaboradores:()=>abrirModalColab(),servicos:()=>abrirModalServico(),categorias:()=>abrirModalCat(),receber:()=>abrirModalReceber(),pagar:()=>abrirModalPagar(),impostos:()=>abrirModalImposto(),almox:()=>abrirModalProduto(),licit:()=>abrirModalCertidao(),provisoes:()=>abrirModalConta(),vendas:()=>abrirModalVenda(),propostas:()=>abrirModalProposta()};
 function navegar(p){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav-link').forEach(x=>x.classList.remove('active'));
@@ -987,7 +1056,7 @@ function navegar(p){
   const btn=document.getElementById('btn-novo');
   btn.style.display=NOVO_FNS[p]?'':'none';
   if(NOVO_FNS[p])btn.onclick=NOVO_FNS[p];
-  const R={dashboard:renderDash,dre:renderDRE,fluxo:renderFluxo,centrocusto:renderCC,relatorios:renderRelatorios,receber:renderReceber,vendas:renderVendas,propostas:renderPropostas,pagar:renderPagar,folha:renderFolha,folhames:renderFolhaMes,impostos:renderImpostos,almox:renderAlmox,provisoes:renderContas,'prov-colab':renderProvRH,clientes:renderClientes,colaboradores:renderColabs,servicos:renderServicos,categorias:renderCats,recibos:renderRecibos,config:carregarConfig};
+  const R={dashboard:renderDash,dre:renderDRE,fluxo:renderFluxo,centrocusto:renderCC,relatorios:renderRelatorios,receber:renderReceber,vendas:renderVendas,propostas:renderPropostas,pagar:renderPagar,folha:renderFolha,folhames:renderFolhaMes,impostos:renderImpostos,almox:renderAlmox,licit:renderLicit,provisoes:renderContas,'prov-colab':renderProvRH,clientes:renderClientes,colaboradores:renderColabs,servicos:renderServicos,categorias:renderCats,recibos:renderRecibos,config:carregarConfig};
   if(R[p])R[p]();
 }
 document.querySelectorAll('[data-page]').forEach(a=>a.addEventListener('click',()=>navegar(a.dataset.page)));
@@ -2200,6 +2269,144 @@ function renderRelatorios(){
     card('⏰','Aging de Recebíveis','Títulos em aberto por faixa de atraso (a vencer, 30, 60, 90, +90) por cliente.','relAging')+
     card('📊','Evolução 12 Meses','Faturado × recebido × despesas mês a mês + participação de cada cliente na receita.','relEvolucao')+
     card('👥','Folha & Provisões','Remuneração, FGTS, provisões e custo total de cada colaborador ativo.','relFolhaProv');
+}
+
+
+// ===== LICITAÇÕES: CERTIDÕES + FORMAÇÃO DE PREÇOS (IN 05/2017) =====
+function _statusCert(c){
+  if(!c.val)return['b-gray','sem validade',9999];
+  const dias=Math.floor((new Date(c.val+'T12:00')-new Date())/(24*3600*1000));
+  if(dias<0)return['b-red','vencida há '+Math.abs(dias)+'d',dias];
+  if(dias<=15)return['b-yellow','vence em '+dias+'d ⚠️',dias];
+  return['b-green','válida ('+dias+'d)',dias];
+}
+function abrirModalCertidao(id){
+  if(id){const c=ERP.certidoes.find(x=>x.id===id);if(!c)return;
+    document.getElementById('mce-titulo').textContent='Editar Certidão';
+    document.getElementById('mce-id').value=c.id;document.getElementById('mce-nome').value=c.nome||'';
+    document.getElementById('mce-num').value=c.num||'';document.getElementById('mce-orgao').value=c.orgao||'';
+    document.getElementById('mce-emissao').value=c.emissao||'';document.getElementById('mce-val').value=c.val||'';
+    document.getElementById('mce-obs').value=c.obs||'';
+  }else{
+    document.getElementById('mce-titulo').textContent='Nova Certidão';
+    ['mce-id','mce-nome','mce-num','mce-orgao','mce-emissao','mce-val','mce-obs'].forEach(x=>document.getElementById(x).value='');
+  }
+  abrirModal('modal-cert');
+}
+function salvarCertidao(){
+  const id=document.getElementById('mce-id').value;
+  const nome=document.getElementById('mce-nome').value.trim();
+  if(!nome){alert('Informe o documento.');return;}
+  const obj={up:Date.now(),id:id||gid(),nome,num:document.getElementById('mce-num').value.trim(),orgao:document.getElementById('mce-orgao').value.trim(),emissao:document.getElementById('mce-emissao').value,val:document.getElementById('mce-val').value,obs:document.getElementById('mce-obs').value.trim()};
+  if(id){ERP.certidoes[ERP.certidoes.findIndex(x=>x.id===id)]=obj;}else ERP.certidoes.push(obj);
+  salvarERP();fm('modal-cert');renderLicit();
+}
+function excluirCertidao(id){if(!confirm('Excluir esta certidão?'))return;ERP.certidoes=ERP.certidoes.filter(x=>x.id!==id);_marcarExcluido('certidoes',id);salvarERP();renderLicit();}
+
+function _calcPlan(v){
+  const m1=v.sal+v.adic+v.outros;
+  const dec=m1*0.0833,fer=m1*0.1111,fgts=m1*0.08,multa=m1*0.032;
+  const benef=v.vt+v.vr+v.benef;
+  const m2=dec+fer+fgts+multa+benef;
+  const m3=m1*(v.resc+v.jur)/100;
+  const m4=m1*v.repo/100;
+  const m5=v.unif+v.mat+v.equip;
+  const sub=m1+m2+m3+m4+m5;
+  const ci=sub*v.ci/100;
+  const lucro=(sub+ci)*v.lucro/100;
+  const antesTrib=sub+ci+lucro;
+  const div=1-v.trib/100;
+  const preco=div>0?antesTrib/div:0;
+  const trib=preco-antesTrib;
+  return{m1,dec,fer,fgts,multa,benef,m2,m3,m4,m5,sub,ci,lucro,trib,preco};
+}
+function _lerPlanCampos(){
+  const g=x=>Number(document.getElementById(x)?.value||0);
+  return{funcao:document.getElementById('mplc-funcao').value.trim(),escala:document.getElementById('mplc-escala').value.trim(),
+    sal:g('mplc-sal'),adic:g('mplc-adic'),outros:g('mplc-outros'),vt:g('mplc-vt'),vr:g('mplc-vr'),benef:g('mplc-benef'),
+    resc:g('mplc-resc'),jur:g('mplc-jur'),repo:g('mplc-repo'),unif:g('mplc-unif'),mat:g('mplc-mat'),equip:g('mplc-equip'),
+    ci:g('mplc-ci'),lucro:g('mplc-lucro'),trib:g('mplc-trib')};
+}
+function calcPlanCusto(){
+  const v=_lerPlanCampos();const r=_calcPlan(v);
+  document.getElementById('mplc-resumo').innerHTML=`
+    <div style="display:flex;justify-content:space-between;"><span>M1 Remuneração</span><strong>${fmt(r.m1)}</strong></div>
+    <div style="display:flex;justify-content:space-between;"><span>M2 Encargos + Benefícios</span><strong>${fmt(r.m2)}</strong></div>
+    <div style="display:flex;justify-content:space-between;"><span>M3+M4 Rescisão/Jurídico/Reposição</span><strong>${fmt(r.m3+r.m4)}</strong></div>
+    <div style="display:flex;justify-content:space-between;"><span>M5 Insumos</span><strong>${fmt(r.m5)}</strong></div>
+    <div style="display:flex;justify-content:space-between;"><span>Subtotal (custo do posto)</span><strong style="color:var(--red)">${fmt(r.sub)}</strong></div>
+    <div style="display:flex;justify-content:space-between;"><span>M6 CI + Lucro + Tributos</span><strong>${fmt(r.ci+r.lucro+r.trib)}</strong></div>
+    <div style="display:flex;justify-content:space-between;border-top:2px solid var(--border);margin-top:4px;padding-top:4px;font-size:14px;"><span><strong>PREÇO FINAL DO POSTO</strong></span><strong style="color:var(--brand)">${fmt(r.preco)}</strong></div>`;
+}
+function abrirModalPlanCusto(id){
+  const set=(x,v)=>document.getElementById(x).value=v;
+  if(id){const p=ERP.planilhasCusto.find(x=>x.id===id);if(!p)return;
+    document.getElementById('mplc-id').value=p.id;
+    set('mplc-funcao',p.funcao||'');set('mplc-escala',p.escala||'');
+    ['sal','adic','outros','vt','vr','benef','resc','jur','repo','unif','mat','equip','ci','lucro','trib'].forEach(k=>set('mplc-'+k,p[k]!=null?p[k]:''));
+  }else{
+    document.getElementById('mplc-id').value='';
+    set('mplc-funcao','');set('mplc-escala','');
+    ['sal','adic','outros','vt','vr','benef','unif','mat','equip'].forEach(k=>set('mplc-'+k,''));
+    set('mplc-resc','4.17');set('mplc-jur',Number(ERP.config.jurPerc||5));set('mplc-repo','0');
+    set('mplc-ci','5');set('mplc-lucro','10');set('mplc-trib',Number(ERP.config.aliq||4.5));
+  }
+  calcPlanCusto();abrirModal('modal-plc');
+}
+function salvarPlanCusto(imprimir){
+  const id=document.getElementById('mplc-id').value;
+  const v=_lerPlanCampos();
+  if(!v.funcao||v.sal<=0){alert('Informe a função e o salário-base.');return;}
+  const obj={up:Date.now(),id:id||gid(),...v,preco:_calcPlan(v).preco};
+  if(id){ERP.planilhasCusto[ERP.planilhasCusto.findIndex(x=>x.id===id)]=obj;}else ERP.planilhasCusto.push(obj);
+  salvarERP();fm('modal-plc');renderLicit();
+  if(imprimir)imprimirPlanCusto(obj);
+}
+function excluirPlanCusto(id){if(!confirm('Excluir esta planilha?'))return;ERP.planilhasCusto=ERP.planilhasCusto.filter(x=>x.id!==id);_marcarExcluido('planilhasCusto',id);salvarERP();renderLicit();}
+function imprimirPlanCusto(p){
+  const r=_calcPlan(p);
+  const li=(d,v)=>`<tr><td>${d}</td><td class="dir">${fmt(v)}</td></tr>`;
+  const mod=(t)=>`<tr><td colspan="2" style="background:#eaf2f9;font-weight:800;">${t}</td></tr>`;
+  const corpo=`<h2>Planilha de Composição de Custos e Formação de Preços</h2>
+  <p class="peq">Modelo referencial baseado na IN nº 05/2017 (Anexo VII-D) — Posto: <strong>${p.funcao}</strong>${p.escala?' · '+p.escala:''}</p>
+  <table><tbody>
+    ${mod('MÓDULO 1 — COMPOSIÇÃO DA REMUNERAÇÃO')}
+    ${li('Salário-base (CCT)',p.sal)}${p.adic?li('Adicionais (HE/noturno/insalubridade)',p.adic):''}${p.outros?li('Outros proventos',p.outros):''}
+    ${li('Total Módulo 1',r.m1)}
+    ${mod('MÓDULO 2 — ENCARGOS E BENEFÍCIOS')}
+    ${li('13º salário (8,33%)',r.dec)}${li('Férias + 1/3 constitucional (11,11%)',r.fer)}${li('FGTS (8%)',r.fgts)}${li('Multa rescisória FGTS (3,2%)',r.multa)}
+    ${p.vt?li('Vale-transporte (líquido)',p.vt):''}${p.vr?li('Vale-refeição/alimentação',p.vr):''}${p.benef?li('Outros benefícios (CCT/seguro)',p.benef):''}
+    ${li('Total Módulo 2',r.m2)}
+    ${mod('MÓDULOS 3 e 4 — PROVISÃO PARA RESCISÃO E REPOSIÇÃO')}
+    ${li('Provisão para rescisão ('+p.resc+'%)',r.m1*p.resc/100)}${li('Contingência jurídica ('+p.jur+'%)',r.m1*p.jur/100)}${p.repo?li('Reposição do profissional ausente ('+p.repo+'%)',r.m4):''}
+    ${li('Total Módulos 3+4',r.m3+r.m4)}
+    ${mod('MÓDULO 5 — INSUMOS')}
+    ${p.unif?li('Uniformes e EPIs',p.unif):''}${p.mat?li('Materiais',p.mat):''}${p.equip?li('Equipamentos',p.equip):''}
+    ${li('Total Módulo 5',r.m5)}
+    <tr class="tot"><td>SUBTOTAL — CUSTO DO POSTO</td><td class="dir">${fmt(r.sub)}</td></tr>
+    ${mod('MÓDULO 6 — CUSTOS INDIRETOS, LUCRO E TRIBUTOS')}
+    ${li('Custos indiretos ('+p.ci+'%)',r.ci)}${li('Lucro ('+p.lucro+'%)',r.lucro)}${li('Tributos ('+p.trib+'% por dentro)',r.trib)}
+    <tr class="tot"><td>PREÇO MENSAL DO POSTO</td><td class="dir">${fmt(r.preco)}</td></tr>
+  </tbody></table>
+  <p class="peq">Percentuais de encargos conforme legislação vigente e prática da empresa (Simples Nacional — Anexo IV). Documento referencial para composição de proposta.</p>`;
+  _abrirRelatorio('Formação de Preços — '+p.funcao,corpo,'Posto de trabalho');
+}
+function renderLicit(){
+  const kpi=(l,v,cor)=>`<div style="flex:1;min-width:110px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow);"><div style="font-size:11px;color:var(--text3);font-weight:700;">${l}</div><div style="font-size:20px;font-weight:800;color:${cor||'var(--text)'};">${v}</div></div>`;
+  const sts=ERP.certidoes.map(c=>_statusCert(c));
+  const venc=sts.filter(s=>s[2]<0).length,alerta=sts.filter(s=>s[2]>=0&&s[2]<=15).length,ok=sts.filter(s=>s[2]>15&&s[2]<9999).length;
+  document.getElementById('lic-kpis').innerHTML=kpi('Certidões',ERP.certidoes.length)+kpi('Válidas',ok,'var(--green)')+kpi('Vencendo ⚠️',alerta,alerta?'var(--orange)':'var(--green)')+kpi('Vencidas',venc,venc?'var(--red)':'var(--green)')+kpi('Planilhas de preço',ERP.planilhasCusto.length,'var(--brand)');
+  document.getElementById('lic-certidoes').innerHTML=ERP.certidoes.length?'<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Documento</th><th>Nº</th><th>Emissão</th><th>Validade</th><th>Status</th><th>Ações</th></tr></thead><tbody>'+
+    [...ERP.certidoes].sort((a,b)=>_statusCert(a)[2]-_statusCert(b)[2]).map(c=>{const s=_statusCert(c);
+      return`<tr><td><strong>${c.nome}</strong>${c.obs?`<div style="font-size:10px;color:var(--text3)">${c.obs}</div>`:''}</td><td>${c.num||'—'}</td>
+      <td>${c.emissao?new Date(c.emissao+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td><strong>${c.val?new Date(c.val+'T12:00').toLocaleDateString('pt-BR'):'—'}</strong></td>
+      <td><span class="badge ${s[0]}">${s[1]}</span></td>
+      <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalCertidao('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCertidao('${c.id}')">🗑️</button></td></tr>`;}).join('')+'</tbody></table></div></div>'
+    :'<div class="card" style="text-align:center;padding:20px;color:var(--text3);">Cadastre suas certidões (CND Federal, CRF/FGTS, CNDT...) — o sistema avisa quando estiverem a 15 dias do vencimento.</div>';
+  document.getElementById('lic-planilhas').innerHTML=ERP.planilhasCusto.length?'<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Função</th><th>Escala</th><th>Salário-base</th><th>Preço do posto</th><th>Ações</th></tr></thead><tbody>'+
+    [...ERP.planilhasCusto].sort((a,b)=>(b.up||0)-(a.up||0)).map(p=>`<tr><td><strong>${p.funcao}</strong></td><td>${p.escala||'—'}</td><td>${fmt(p.sal)}</td><td><strong style="color:var(--brand)">${fmt(p.preco||_calcPlan(p).preco)}</strong></td>
+      <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalPlanCusto('${p.id}')">✏️</button><button class="btn btn-primary btn-sm" onclick="imprimirPlanCusto(ERP.planilhasCusto.find(x=>x.id==='${p.id}'))">🖨️</button><button class="btn btn-danger btn-sm" onclick="excluirPlanCusto('${p.id}')">🗑️</button></td></tr>`).join('')+'</tbody></table></div></div>'
+    :'<div class="card" style="text-align:center;padding:20px;color:var(--text3);">Monte a planilha oficial de formação de preço de um posto — sai pronta pra anexar em proposta ou licitação.</div>';
 }
 
 // ===== ALMOXARIFADO & EPI =====

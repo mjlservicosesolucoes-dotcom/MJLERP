@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v17</title>
+<title>MJL ERP Financeiro v18</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -633,6 +633,7 @@ tr:hover td{background:#fafbff;}
     <input type="hidden" id="mpag-id">
     <div class="fr"><div class="fg"><label>Descrição *</label><input id="mpag-desc"></div><div class="fg"><label>Categoria</label><select id="mpag-cat"><option value="">Sem categoria</option></select></div></div>
     <div class="fr"><div class="fg"><label>Valor (R$)</label><input type="number" id="mpag-val" step="0.01"></div><div class="fg"><label>Vencimento</label><input type="date" id="mpag-venc"></div></div>
+    <div class="fg"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="checkbox" id="mpag-capital" style="width:auto;"> 💰 Aporte / retirada de capital (não conta como despesa — só movimenta o caixa)</label></div>
     <div class="fr"><div class="fg"><label>Recorrência</label><select id="mpag-rec"><option value="unica">Única</option><option value="mensal">Mensal</option><option value="anual">Anual</option></select></div><div class="fg"><label>Competência (mês do USO)</label><input type="month" id="mpag-comp"><div style="font-size:10px;color:var(--text3);margin-top:2px;">Ex: VT pago em 28/07 pra usar em agosto → competência 2026-08</div></div></div>
     <div style="background:var(--bg);border-radius:var(--r-sm);padding:10px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -1024,7 +1025,23 @@ function enviarParaSheets(){
         });
     });
 }
-function carregarERP(){const r=localStorage.getItem('mjl_erp_v2');if(r)ERP=JSON.parse(r);}
+function carregarERP(){
+  const r=localStorage.getItem('mjl_erp_v2');if(r)ERP=JSON.parse(r);
+  _migrarV18();
+}
+function _migrarV18(){
+  if(localStorage.getItem('mjl_erp_migr_v18'))return;
+  let n=0;
+  (ERP.pagar||[]).forEach(p=>{
+    const d=(p.desc||'').toLowerCase();
+    // 1) Contas de folha geradas antes da flag → marca p/ não contar 2x no CC
+    if(!p.folha&&(d.includes('folha real')||((d.startsWith('salário')||d.startsWith('salario')||d.startsWith('fgts'))&&!p.estoque))){p.folha=true;n++;}
+    // 2) Aportes/retiradas lançados por engano em Contas a Pagar → marca como capital
+    if(d.includes('aporte')||d.includes('retirada de capital')||d.includes('pró-labore aporte')){p.capital=true;p.folha=false;n++;}
+  });
+  localStorage.setItem('mjl_erp_migr_v18','1');
+  if(n>0){try{salvarERP();}catch(e){}}
+}
 function gid(){
   if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();
   // Fallback com contador para garantir unicidade mesmo em loops rápidos
@@ -1249,7 +1266,7 @@ function _rateiosDoPagar(p){
 function _detalheRateioPagarPorCliente(cliId,mes){
   const linhas=[];
   ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes).forEach(p=>{
-    if(p.estoque||p.folha)return; // estoque entra pela saída; folha entra pela mão de obra (evita contar 2x)
+    if(p.estoque||p.folha||p.capital)return; // estoque→saída; folha→mão de obra; capital→só no caixa (evita distorcer resultado)
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc,pct:Number(r.pct),val:valor*Number(r.pct)/100});
@@ -1518,7 +1535,7 @@ function abrirModalPagar(id){
   popCatSel('mpag-cat');const h=new Date();
   if(id){
     const p=ERP.pagar.find(x=>x.id===id);
-    document.getElementById('mpag-id').value=p.id;document.getElementById('mpag-desc').value=p.desc||'';document.getElementById('mpag-cat').value=p.catId||'';document.getElementById('mpag-val').value=p.val||'';document.getElementById('mpag-venc').value=p.venc||'';document.getElementById('mpag-comp').value=p.comp||'';document.getElementById('mpag-rec').value=p.recorr||'unica';document.getElementById('mpag-st').value=p.st||'pendente';document.getElementById('mpag-dpag').value=p.dpag||'';document.getElementById('mpag-obs').value=p.obs||'';
+    document.getElementById('mpag-id').value=p.id;document.getElementById('mpag-desc').value=p.desc||'';document.getElementById('mpag-cat').value=p.catId||'';document.getElementById('mpag-val').value=p.val||'';document.getElementById('mpag-venc').value=p.venc||'';document.getElementById('mpag-comp').value=p.comp||'';document.getElementById('mpag-capital').checked=!!p.capital;document.getElementById('mpag-rec').value=p.recorr||'unica';document.getElementById('mpag-st').value=p.st||'pendente';document.getElementById('mpag-dpag').value=p.dpag||'';document.getElementById('mpag-obs').value=p.obs||'';
     // Compatibilidade: lançamentos antigos só tinham um ccId único — vira
     // automaticamente um rateio de 100% pra esse mesmo cliente.
     if(p.rateios&&p.rateios.length)_rateiosPag=p.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
@@ -1527,7 +1544,7 @@ function abrirModalPagar(id){
   }
   else{
     ['mpag-id','mpag-desc','mpag-val','mpag-dpag','mpag-obs'].forEach(x=>document.getElementById(x).value='');
-    document.getElementById('mpag-cat').value='';document.getElementById('mpag-venc').value=h.toISOString().slice(0,10);document.getElementById('mpag-comp').value='';document.getElementById('mpag-rec').value='unica';document.getElementById('mpag-st').value='pendente';
+    document.getElementById('mpag-cat').value='';document.getElementById('mpag-venc').value=h.toISOString().slice(0,10);document.getElementById('mpag-comp').value='';document.getElementById('mpag-capital').checked=false;document.getElementById('mpag-rec').value='unica';document.getElementById('mpag-st').value='pendente';
     _rateiosPag=[];
   }
   renderRateiosPag();abrirModal('modal-pag');
@@ -1540,7 +1557,7 @@ function salvarPagar(){
   const id=document.getElementById('mpag-id').value;const catId=document.getElementById('mpag-cat').value;const cat=ERP.categorias.find(c=>c.id===catId);
   const rateios=_rateiosPag.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
   const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
-  const obj={up:Date.now(),id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,comp:document.getElementById('mpag-comp').value||'',ccId:principal?principal.ccId:'',rateios,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
+  const obj={up:Date.now(),id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,comp:document.getElementById('mpag-comp').value||'',capital:document.getElementById('mpag-capital').checked,ccId:principal?principal.ccId:'',rateios,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
   if(id){const i=ERP.pagar.findIndex(x=>x.id===id);ERP.pagar[i]=obj;}else ERP.pagar.push(obj);
   salvarERP();fm('modal-pag');renderPagar();renderDash();
 }
@@ -2155,7 +2172,7 @@ function relDRE(){
   const ret=ERP.impostos.filter(i=>i.comp===mes&&i.ret==='sim').reduce((s,i)=>s+Number(i.val||0),0);
   const das=receita*Number(ERP.config.aliq||4.5)/100;
   const impostos=ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').reduce((s,i)=>s+Number(i.val||0),0);
-  const despesas=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes&&!p.estoque).reduce((s,p)=>s+Number(p.val||0),0);
+  const despesas=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes&&!p.estoque&&!p.capital).reduce((s,p)=>s+Number(p.val||0),0);
   const material=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes).reduce((s,m)=>s+Number(m.custoTotal||0),0);
   const provisoes=ERP.colaboradores.filter(c=>c.ativo!==false&&c.tipo==='CLT').reduce((s,c)=>s+Number(c.provMes||0),0);
   const resultado=receita-ret-das-despesas-impostos-material;
@@ -2220,7 +2237,7 @@ function relEvolucao(){
     const m=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     const fat=ERP.receber.filter(r=>(r.comp===m||r.venc?.slice(0,7)===m)).reduce((s,r)=>s+Number(r.val||0),0)+ERP.vendas.filter(v=>(v.data||'').slice(0,7)===m).reduce((s,v)=>s+Number(v.val||0),0);
     const rec=ERP.receber.filter(r=>r.st==='recebido'&&(r.drec||r.venc||'').slice(0,7)===m).reduce((s,r)=>s+Number(r.val||0),0);
-    const desp=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===m&&!p.estoque).reduce((s,p)=>s+Number(p.val||0),0)+ERP.impostos.filter(x=>x.comp===m&&x.ret!=='sim').reduce((s,x)=>s+Number(x.val||0),0);
+    const desp=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===m&&!p.estoque&&!p.capital).reduce((s,p)=>s+Number(p.val||0),0)+ERP.impostos.filter(x=>x.comp===m&&x.ret!=='sim').reduce((s,x)=>s+Number(x.val||0),0);
     t.fat+=fat;t.rec+=rec;t.desp+=desp;
     const res=fat-fat*Number(ERP.config.aliq||4.5)/100-desp;
     linhas+=`<tr><td>${MESES[d.getMonth()]} ${d.getFullYear()}</td><td class="dir">${fmt(fat)}</td><td class="dir">${fmt(rec)}</td><td class="dir neg">(${fmt(desp)})</td><td class="dir ${res>=0?'pos':'neg'}"><strong>${fmt(res)}</strong></td></tr>`;

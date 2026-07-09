@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v18</title>
+<title>MJL ERP Financeiro v19</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -2822,92 +2822,112 @@ function imprimirProposta(p){
   const tot=p.postos.reduce((s,x)=>s+x.qtd*x.val,0);
   const matTxt=p.mat==='mjl'?'Os materiais de limpeza serão fornecidos pela MJL (já inclusos no valor), assim como os EPIs e uniformes dos colaboradores.':'Os materiais e equipamentos de limpeza serão fornecidos pelo Condomínio/Cliente. A MJL fornece os uniformes e EPIs de uso pessoal dos seus colaboradores.';
   const B=p.blocos||{};
+  const AZUL='#1f7fd1', AZULC='#9fcdf0', CINZA='#f0f2f5';
+  // SVG decorativo de mãos unidas (autossuficiente, não depende de imagem externa)
+  const maosSVG=`<svg viewBox="0 0 300 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
+    <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b6cb0"/><stop offset="1" stop-color="#63a4d8"/></linearGradient></defs>
+    <rect width="300" height="380" fill="url(#g1)"/>
+    <g fill="#ffffff" opacity="0.85" transform="translate(150 210)">
+      ${[0,60,120,180,240,300].map(a=>`<g transform="rotate(${a})"><rect x="-14" y="-118" width="28" height="86" rx="14"/><circle cx="0" cy="-120" r="18"/></g>`).join('')}
+      <circle cx="0" cy="0" r="30" fill="#ffffff" opacity="0.9"/>
+    </g>
+    <g opacity="0.25" fill="#ffffff">${[40,90,140,240,320].map((y,i)=>`<circle cx="${30+i*55}" cy="${y}" r="${6+i}"/>`).join('')}</g>
+  </svg>`;
   const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${p.num} — ${p.cli}</title><style>
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Segoe UI',Arial,sans-serif;color:#2b2b2b;font-size:13px;line-height:1.55;}
-    .pg{width:210mm;min-height:290mm;padding:14mm 15mm 20mm;page-break-after:always;position:relative;}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#33373d;font-size:13px;line-height:1.6;}
+    .pg{width:210mm;min-height:297mm;page-break-after:always;position:relative;overflow:hidden;}
     .pg:last-child{page-break-after:auto;}
-    h1{font-size:34px;font-weight:800;color:#111;}
-    .sub{font-size:30px;font-weight:800;color:#9fcdf0;}
-    .risco{color:#9fcdf0;font-weight:800;letter-spacing:2px;}
-    h2{font-size:23px;font-weight:800;color:#111;margin-bottom:2px;}
-    h3{font-size:15px;font-weight:800;margin:14px 0 6px;}
+    .pad{padding:16mm 16mm 22mm;}
+    h1{font-size:40px;font-weight:800;color:#1c1c1c;line-height:1.05;}
+    .h1b{font-size:40px;font-weight:800;color:${AZUL};line-height:1.05;}
+    h2{font-size:34px;font-weight:800;color:#1c1c1c;line-height:1.1;}
+    .h2b{font-size:34px;font-weight:800;color:${AZULC};line-height:1.1;margin-bottom:4px;}
+    h3{font-size:15px;font-weight:800;margin:16px 0 6px;color:#222;}
     p{margin-bottom:8px;}
-    ul{margin:6px 0 10px 18px;}li{margin-bottom:4px;}
-    .capa-band{position:absolute;left:0;top:70mm;bottom:12mm;width:120mm;background:#bfe0f8;border-radius:0 6px 6px 0;}
-    .capa-card{position:absolute;left:14mm;top:96mm;width:96mm;background:#fff;border-radius:22px;padding:16mm 12mm;}
-    .capa-card .lbl{font-size:11px;color:#777;margin-top:10px;}
-    .capa-card .val{font-size:15px;font-weight:800;}
-    .linha-azul{border-top:3px solid #bfe0f8;margin:6px 0 14px;}
-    .duascol{display:flex;gap:10mm;}.duascol>div{flex:1;}
+    ul{margin:6px 0 10px 0;list-style:none;}li{margin-bottom:6px;padding-left:16px;position:relative;}
+    li::before{content:'•';color:${AZUL};position:absolute;left:2px;font-weight:800;}
+    .risco{color:${AZULC};font-weight:900;letter-spacing:3px;font-size:20px;font-style:italic;}
     table{width:100%;border-collapse:collapse;margin:8px 0 4px;}
-    th{background:#eaf4fd;text-align:left;padding:8px 10px;font-size:12px;border-bottom:2px solid #bfe0f8;}
-    td{padding:9px 10px;border-bottom:1px solid #e8eef4;font-size:13px;}
-    .tot-row td{font-weight:800;font-size:14px;border-top:2px solid #bfe0f8;background:#f6fbff;}
-    .rodape{position:absolute;bottom:8mm;left:16mm;right:16mm;font-size:9px;color:#888;border-top:1px solid #ddd;padding-top:4px;}
-    .ass{margin-top:26mm;display:flex;gap:14mm;}
-    .ass div{flex:1;border-top:1.5px solid #444;padding-top:5px;text-align:center;font-size:12px;}
+    th{background:#eef5fb;text-align:left;padding:9px 11px;font-size:12px;border-bottom:2px solid ${AZUL};}
+    td{padding:10px 11px;border-bottom:1px solid #e8eef4;font-size:13px;}
+    .tot-row td{font-weight:800;font-size:14px;border-top:2px solid ${AZUL};background:#f4f9fe;}
+    .invest-row{display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid #e2e8f0;}
+    .invest-row .v{border-left:1.5px solid #cbd5e0;padding-left:14px;font-weight:600;}
+    .rodape{position:absolute;bottom:9mm;left:16mm;right:16mm;font-size:9px;color:#9aa5b1;border-top:1px solid #e2e8f0;padding-top:5px;text-align:center;}
+    .ass{margin-top:30mm;display:flex;gap:16mm;}
+    .ass div{flex:1;border-top:1.4px solid #4a5568;padding-top:6px;text-align:center;font-size:11px;color:#4a5568;}
+    .ico{width:52px;height:52px;border-radius:50%;border:2px solid ${AZULC};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
   </style></head><body>
 
+  <!-- CAPA -->
   <div class="pg">
-    <h1>Proposta Comercial</h1>
-    <div class="sub">MJL Serviços e Soluções</div>
-    <div class="capa-band"></div>
-    <div class="capa-card">
-      <div style="font-size:16px;font-weight:800;">A/C ${p.ac||''}</div>
-      <div style="font-size:12px;color:#555;">${p.cli}${p.end?' — '+p.end:''}</div>
-      <div class="linha-azul" style="margin-top:14px;"></div>
-      <div style="font-weight:700;">MJL Serviços e Soluções</div>
-      <div style="font-size:12px;">📞 (21) 96838-1313<br>✉️ mjlservicosesolucoes@gmail.com</div>
-      <div class="lbl">Nº da Proposta:</div><div class="val">${p.num}</div>
-      <div class="lbl">Data de Emissão:</div><div class="val">${fmtD(p.data)}</div>
-      <div class="lbl">Validade da Proposta:</div><div class="val">${fmtD(p.validade)}</div>
+    <div style="position:absolute;top:0;right:0;width:40%;height:100%;background:${CINZA};"></div>
+    <svg style="position:absolute;top:0;right:0;width:42%;height:100%;opacity:0.5;" viewBox="0 0 200 400" preserveAspectRatio="none"><g fill="none" stroke="#d4dae1" stroke-width="1">${[0,1,2,3,4,5,6,7].map(i=>`<path d="M${200-i*22} 0 Q ${120-i*18} 200 ${200-i*10} 400"/>`).join('')}</g></svg>
+    <div style="position:absolute;left:16mm;top:20mm;"><h1>Proposta</h1><div class="h1b">Comercial</div></div>
+    <div style="position:absolute;left:0;top:70mm;width:62%;bottom:14mm;background:${AZUL};"></div>
+    <div style="position:absolute;left:14mm;top:92mm;width:80mm;background:#fff;border-radius:26px;padding:15mm 12mm;box-shadow:0 10px 30px rgba(0,0,0,.12);">
+      <div style="font-size:17px;font-weight:800;">${p.cli}</div>
+      ${p.ac?`<div style="font-size:12px;color:#666;margin-top:2px;">A/C ${p.ac}</div>`:''}
+      ${p.end?`<div style="font-size:11px;color:#888;">${p.end}</div>`:''}
+      <div style="margin-top:16px;font-size:15px;font-weight:600;">MJL Serviços e Soluções</div>
+      <div style="margin-top:8px;font-size:12px;color:#444;display:flex;align-items:center;gap:8px;"><span style="color:${AZUL};font-size:15px;">📞</span> (21) 9 6838-1313</div>
+      <div style="margin-top:4px;font-size:12px;color:#444;display:flex;align-items:center;gap:8px;"><span style="color:${AZUL};font-size:15px;">✉️</span> contato@mjlservicosesolucoes.com.br</div>
+      <div style="margin-top:8px;font-size:12px;font-weight:800;">www.mjlservicosesolucoes.com.br</div>
+      <div style="border-top:3px solid ${AZULC};width:60px;margin:16px 0;"></div>
+      <div style="font-size:11px;color:#888;">Nº da Proposta:</div><div style="font-size:14px;font-weight:800;">${p.num}</div>
+      <div style="font-size:11px;color:#888;margin-top:8px;">Data de Emissão:</div><div style="font-size:14px;font-weight:800;">${fmtD(p.data)}</div>
+      <div style="font-size:11px;color:#888;margin-top:8px;">Validade da Proposta:</div><div style="font-size:14px;font-weight:800;">${fmtD(p.validade)}</div>
     </div>
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — Av. das Américas 4200, Bl 1 Sala 305, Barra da Tijuca — Rio de Janeiro/RJ</div>
   </div>
 
-  ${B.sobre!==false?`<div class="pg">
-    <h2>Sobre a</h2><div class="sub" style="font-size:26px;">Empresa</div>
-    <div class="risco">//////</div>
-    <h3>Quem Somos</h3>${paras(p.tSobre)}
-    <h3>Porque Escolher a MJL</h3><ul>${bullets(p.tPorque)}</ul>
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
+  ${B.sobre!==false?`<!-- SOBRE -->
+  <div class="pg">
+    <div style="position:absolute;left:0;top:0;width:38%;height:100%;">${maosSVG}</div>
+    <div style="margin-left:40%;" class="pad">
+      <div style="text-align:right;"><h2>Sobre a</h2><div class="h2b">Empresa</div><div class="risco">/////</div></div>
+      <h3>Quem Somos</h3>${paras(p.tSobre)}
+      <h3 style="margin-top:22px;">Porque Escolher a MJL</h3><ul>${bullets(p.tPorque)}</ul>
+    </div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
   </div>`:''}
 
-  <div class="pg">
-    ${B.resp!==false?`<h2>Descrição do Projeto</h2><div class="sub" style="font-size:22px;">Especificações</div>
-    <div class="risco">//////</div>
+  <!-- PROJETO + ORÇAMENTO -->
+  <div class="pg"><div class="pad">
+    ${B.resp!==false?`<div style="text-align:right;"><h2>Descrição do Projeto</h2><div class="h2b" style="font-size:28px;">Especificações</div><div class="risco">/////</div></div>
     <h3>Projeto — ${p.cli}</h3>
-    <p>Propomos a terceirização com equipe dedicada e qualificada, garantindo limpeza, organização e conservação contínua, com supervisão semanal da MJL, treinamentos frequentes e gestão digital da operação (ponto eletrônico com foto e GPS, cronograma com registro fotográfico e canal de chamados).</p>
-    <div class="duascol" style="margin-top:6px;">
-      <div><h3>Responsabilidades do Condomínio</h3><ul>${bullets(p.tRespCli)}</ul></div>
-      <div><h3>Responsabilidades da MJL</h3><ul>${bullets(p.tRespMjl)}</ul></div>
+    <p>Propomos a terceirização com equipe dedicada e qualificada, garantindo limpeza, organização e conservação contínuas das áreas comuns, com supervisão semanal da MJL, treinamentos frequentes e gestão digital da operação (ponto eletrônico com foto e GPS, cronograma com registro fotográfico e canal de chamados).</p>
+    <div style="display:flex;gap:12mm;margin-top:8px;">
+      <div style="flex:1;"><h3>Responsabilidades do Condomínio</h3><ul>${bullets(p.tRespCli)}</ul></div>
+      <div style="flex:1;"><h3>Responsabilidades da MJL</h3><ul>${bullets(p.tRespMjl)}</ul></div>
     </div>
-    <div style="border-top:3px solid #bfe0f8;margin:10px 0 12px;"></div>`:`<h2>Orçamento</h2><div class="sub" style="font-size:22px;">Detalhado</div><div class="risco">//////</div>`}
+    <div style="border-top:3px solid ${AZULC};margin:14px 0;"></div>`:`<div style="text-align:right;"><h2>Orçamento</h2><div class="h2b" style="font-size:28px;">Detalhado</div><div class="risco">/////</div></div>`}
     <h3>Planejamento Técnico e Operacional</h3>
-    <p>A MJL Serviços e Soluções selecionará uma equipe qualificada e capacitada para as atividades. O planejamento será adaptado às necessidades específicas do ${p.cli}. ${matTxt}</p>
-    <h3>Investimento Mensal</h3>
-    <table><thead><tr><th>Função</th><th>Escala / Horário</th><th style="text-align:center;">Qtd</th><th style="text-align:right;">Valor Unitário</th><th style="text-align:right;">Total</th></tr></thead><tbody>
-      ${p.postos.map(x=>`<tr><td><strong>${x.funcao}</strong></td><td>${x.escala||'—'}</td><td style="text-align:center;">${x.qtd}</td><td style="text-align:right;">${fmt(x.val)}</td><td style="text-align:right;"><strong>${fmt(x.qtd*x.val)}</strong></td></tr>`).join('')}
-      <tr class="tot-row"><td colspan="4">Total Investimento Mensal — já inclusos todos os impostos, encargos, benefícios e uniforme</td><td style="text-align:right;">${fmt(tot)}</td></tr>
-    </tbody></table>
+    <p>A MJL selecionará uma equipe qualificada e capacitada para as atividades. O planejamento será adaptado às necessidades específicas do ${p.cli} e poderá ser consultado após a aceitação e assinatura do contrato. ${matTxt}</p>
+    <h3 style="margin-top:16px;">Investimento Detalhado Mensal</h3>
+    ${p.postos.map(x=>`<div class="invest-row"><span><strong>${x.qtd>1?x.qtd+' × ':''}${x.funcao}</strong>${x.escala?' — '+x.escala:''}</span><span class="v">${fmt(x.qtd*x.val)}</span></div>`).join('')}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 2px;margin-top:6px;border-top:2px solid ${AZUL};">
+      <span style="font-weight:800;font-size:15px;">Investimento Total Mensal</span>
+      <span style="font-weight:800;font-size:17px;color:${AZUL};border-left:1.5px solid #cbd5e0;padding-left:14px;">${fmt(tot)}</span>
+    </div>
+    <p style="font-size:11px;color:#888;margin-top:4px;">Já inclusos todos os impostos, encargos, benefícios, uniformes e material de limpeza.</p>
     ${B.comp?`<h3>Composição de Custos</h3>${paras(p.tComp)}`:''}
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
-  </div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
+  </div></div>
 
-  <div class="pg">
-    ${B.resumo!==false?`<h2>Resumo das</h2><div class="sub" style="font-size:26px;">Condições Contratuais</div>
-    <div class="risco">//////</div>
-    <ul>${bullets(p.tResumo)}</ul>`:''}
-    <h3 style="margin-top:16px;">Condições de Pagamento</h3>${paras(p.tPag)}
+  <!-- CONDIÇÕES + CONCLUSÃO -->
+  <div class="pg"><div class="pad">
+    ${B.resumo!==false?`<h2>Resumo das</h2><div class="h2b" style="font-size:26px;">Condições Contratuais</div><div class="risco">/////</div>
+    <ul style="margin-top:8px;">${bullets(p.tResumo)}</ul>`:''}
+    <h3 style="margin-top:18px;">Condição de Pagamento</h3>${paras(p.tPag)}
     <h3>Conclusão</h3>
-    <p>A MJL Serviços e Soluções está pronta para ser a parceira que o ${p.cli} precisa para elevar o padrão dos seus serviços. Nossa expertise, compromisso com a qualidade e foco na satisfação do cliente são a garantia de uma parceria de sucesso.</p>
+    <p>A MJL Serviços e Soluções está pronta para ser a parceira que o ${p.cli} precisa para elevar o padrão de seus serviços. Nossa expertise, compromisso com a qualidade e foco na satisfação do cliente são a garantia de uma parceria de sucesso.</p>
     <p>Estamos à disposição para quaisquer esclarecimentos e para formalizar esta parceria.</p>
-    <p style="margin-top:14px;">Rio de Janeiro, ${fmtD(p.data)}</p>
-    <div class="ass"><div>${p.cli}</div><div>MJL Serviços e Soluções LTDA</div></div>
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 96838-1313 — mjlservicosesolucoes@gmail.com</div>
-  </div>
+    <p style="margin-top:16px;">Rio de Janeiro, ${fmtD(p.data)}</p>
+    <div class="ass"><div>MJL Serviços e Soluções</div><div>${p.cli}</div></div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
+  </div></div>
   <script>window.onload=function(){window.print();};</scr`+`ipt></body></html>`;
   const w=window.open('','_blank');w.document.write(html);w.document.close();
 }

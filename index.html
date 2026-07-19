@@ -886,9 +886,18 @@ tr:hover td{background:#fafbff;}
       <div class="fr"><div class="fg"><label>Valor (R$)</label><input type="number" id="mrb-val" step="0.01"></div><div class="fg"><label>Número</label><input id="mrb-num"></div></div>
     </div>
     <div id="mrb-form-rpa" class="hidden">
-      <div class="fr"><div class="fg"><label>RPA *</label><select id="mrb-rpa"></select></div><div class="fg"><label>Competência</label><input type="month" id="mrb-rpa-comp"></div></div>
-      <div class="fg"><label>Descrição</label><textarea id="mrb-rpa-desc" style="min-height:60px;"></textarea></div>
-      <div class="fr"><div class="fg"><label>Valor (R$)</label><input type="number" id="mrb-rpa-val" step="0.01"></div><div class="fg"><label>Número</label><input id="mrb-rpa-num"></div></div>
+      <div class="fr"><div class="fg"><label>RPA *</label><select id="mrb-rpa" onchange="preencherRecRpaDaFolha()"></select></div><div class="fg"><label>Competência</label><input type="month" id="mrb-rpa-comp" onchange="preencherRecRpaDaFolha()"></div></div>
+      <div class="fg"><label>Descrição</label><textarea id="mrb-rpa-desc" style="min-height:50px;"></textarea></div>
+      <div class="fr3">
+        <div class="fg"><label>Salário/Base (R$)</label><input type="number" id="mrb-rpa-base" step="0.01" oninput="calcRecRpa()"></div>
+        <div class="fg"><label>Adicionais (R$)</label><input type="number" id="mrb-rpa-adic" step="0.01" oninput="calcRecRpa()"></div>
+        <div class="fg"><label>Insalubridade (R$)</label><input type="number" id="mrb-rpa-insal" step="0.01" oninput="calcRecRpa()"></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label>Total Bruto</label><input id="mrb-rpa-bruto" readonly style="font-weight:700;"></div>
+        <div class="fg"><label>(−) INSS 11%</label><input id="mrb-rpa-inss" readonly style="color:var(--red);font-weight:700;"></div>
+      </div>
+      <div class="fr"><div class="fg"><label>Total Líquido</label><input id="mrb-rpa-val" readonly style="background:var(--green-light);font-weight:700;color:var(--green);font-size:15px;"></div><div class="fg"><label>Número</label><input id="mrb-rpa-num"></div></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-primary" style="flex:1" onclick="gerarRecibo()">📄 Gerar e Imprimir</button><button class="btn btn-ghost" onclick="fm('modal-recibo')">Cancelar</button></div>
   </div>
@@ -1995,15 +2004,20 @@ let _fmItens=[];
 function _fmCalcItem(it){
   const proventos=Number(it.base||0)+Number(it.he||0)+Number(it.not||0)+Number(it.insal||0)+Number(it.peric||0)+Number(it.dsr||0)+Number(it.outros||0);
   const benef=0; // v14: VT/VR entram pelo lançamento da COMPRA (rateio pela equipe), não pela folha
-  const liquidoAuto=proventos-Number(it.descs||0);
-  const remProv=proventos; // provisões e FGTS sobre a remuneração bruta do mês
   const clt=it.tipo==='CLT';
+  const rpa=it.tipo==='RPA';
+  // Todo RPA tem 11% de INSS descontado por lei sobre os proventos do mês
+  // (não incide sobre VT/VA, que são pagos à parte / integrais)
+  const inssRpa=rpa?Math.round(proventos*0.11*100)/100:0;
+  const liquidoAuto=proventos-Number(it.descs||0)-inssRpa;
+  const remProv=proventos; // provisões e FGTS sobre a remuneração bruta do mês
   const fgts=clt?remProv*0.08:0;
   const pFer=clt?remProv*1.333/12:0;
   const pDec=clt?remProv/12:0;
   const pResc=clt?remProv*0.5/12:0;
   const pJur=clt?remProv*Number(ERP.config.jurPerc||5)/100:0;
-  return {proventos,benef,liquidoAuto,fgts,pFer,pDec,pResc,pJur,provTot:pFer+pDec+pResc+pJur,custoTotal:proventos+benef+fgts+pFer+pDec+pResc+pJur};
+  return {proventos,benef,inssRpa,liquidoAuto,fgts,pFer,pDec,pResc,pJur,provTot:pFer+pDec+pResc+pJur,custoTotal:proventos+benef+fgts+pFer+pDec+pResc+pJur};
+}
 }
 function _fmAtualizarLinha(i){
   const c=_fmCalcItem(_fmItens[i]);
@@ -2017,10 +2031,10 @@ function _fmAtualizarLinha(i){
   _fmTotais();
 }
 function _fmTotais(){
-  let t={prov:0,liq:0,fgts:0,fer:0,dec:0,resc:0,jur:0,provT:0,cust:0};
+  let t={prov:0,liq:0,fgts:0,fer:0,dec:0,resc:0,jur:0,provT:0,cust:0,inss:0};
   _fmItens.forEach(it=>{const c=_fmCalcItem(it);
     t.prov+=c.proventos;t.liq+=(it._liqManual&&it.liquido!=null)?Number(it.liquido):c.liquidoAuto;
-    t.benef=(t.benef||0)+c.benef;
+    t.benef=(t.benef||0)+c.benef;t.inss+=(c.inssRpa||0);
     t.fgts+=c.fgts;t.fer+=c.pFer;t.dec+=c.pDec;t.resc+=c.pResc;t.jur+=c.pJur;t.provT+=c.provTot;t.cust+=c.custoTotal;});
   const el=document.getElementById('fm-provisoes');
   if(el)el.innerHTML=`<div class="card">
@@ -2033,7 +2047,7 @@ function _fmTotais(){
       <div style="background:var(--purple);border-radius:8px;padding:10px;color:#fff;"><div style="font-size:11px;opacity:.85;">TOTAL PROVISÃO</div><div style="font-weight:800;font-size:16px;">${fmt(t.provT)}</div></div>
     </div>
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:12px;font-weight:700;">
-      <span>Proventos: ${fmt(t.prov)}</span><span>Líquido: ${fmt(t.liq)}</span><span>FGTS: ${fmt(t.fgts)}</span><span style="color:var(--red);">CUSTO TOTAL DO MÊS: ${fmt(t.cust)}</span>
+<span>Proventos: ${fmt(t.prov)}</span><span style="color:var(--orange);">INSS RPA (11%): ${fmt(t.inss)}</span><span>Líquido: ${fmt(t.liq)}</span><span>FGTS: ${fmt(t.fgts)}</span><span style="color:var(--red);">CUSTO TOTAL DO MÊS: ${fmt(t.cust)}</span>
     </div>
   </div>`;
 }
@@ -2055,8 +2069,8 @@ function renderFolhaMes(){
   }
   const dis=fechada?'disabled':'';
   const inp=(i,campo,val)=>`<input type="number" step="0.01" value="${val||0}" ${dis} style="width:86px;padding:5px 6px;font-size:12px;" oninput="_fmItens[${i}].${campo}=Number(this.value)||0;_fmAtualizarLinha(${i})">`;
-  document.getElementById('fm-tabela').innerHTML=_fmItens.length?`<div class="card" style="padding:0;"><div class="table-wrap"><table>
-    <thead><tr><th>Colaborador</th><th>Base (R$)</th><th>H. Extra</th><th>Ad. Not.</th><th>Insalub.</th><th>Peric.</th><th>DSR/Refl.</th><th>Outros</th><th>Descontos</th><th>Proventos</th><th>Líquido a pagar</th><th>FGTS 8%</th><th>Provisões</th><th>Custo total</th></tr></thead>
+ document.getElementById('fm-tabela').innerHTML=_fmItens.length?`<div class="card" style="padding:0;"><div class="table-wrap"><table>
+    <thead><tr><th>Colaborador</th><th>Base (R$)</th><th>H. Extra</th><th>Ad. Not.</th><th>Insalub.</th><th>Peric.</th><th>DSR/Refl.</th><th>Outros</th><th>Descontos</th><th>Proventos</th><th>INSS 11% (RPA)</th><th>Líquido a pagar</th><th>FGTS 8%</th><th>Provisões</th><th>Custo total</th><th></th></tr></thead>
     <tbody>${_fmItens.map((it,i)=>{const c=_fmCalcItem(it);
       return`<tr>
         <td><strong>${it.nome}</strong><div style="font-size:10px;color:var(--text3)">${it.tipo} · ${it.func||'—'}</div></td>
@@ -2064,12 +2078,14 @@ function renderFolhaMes(){
         <td>${inp(i,'insal',it.insal)}</td><td>${inp(i,'peric',it.peric)}</td><td>${inp(i,'dsr',it.dsr)}</td>
         <td>${inp(i,'outros',it.outros)}</td><td>${inp(i,'descs',it.descs)}</td>
         <td id="fm-prov-${i}" style="font-weight:700;">${fmt(c.proventos)}</td>
+        <td id="fm-inss-${i}" style="color:var(--orange);">${it.tipo==='RPA'?fmt(c.inssRpa):'—'}</td>
         <td><input type="number" step="0.01" id="fm-liq-${i}" value="${(it._liqManual&&it.liquido!=null?Number(it.liquido):c.liquidoAuto).toFixed(2)}" ${dis} style="width:96px;padding:5px 6px;font-size:12px;font-weight:700;" oninput="_fmItens[${i}].liquido=Number(this.value)||0;_fmItens[${i}]._liqManual=true;_fmTotais()"></td>
         <td id="fm-fgts-${i}">${fmt(c.fgts)}</td>
         <td id="fm-provt-${i}" style="color:var(--purple);font-weight:700;">${fmt(c.provTot)}</td>
         <td id="fm-cust-${i}" style="color:var(--red);font-weight:700;">${fmt(c.custoTotal)}</td>
+        <td>${dis?'':`<button class="btn btn-danger btn-sm" onclick="_fmRemoverLinha(${i})" title="Remover este colaborador SÓ deste mês — não mexe no cadastro">🗑️</button>`}</td>
       </tr>`;}).join('')}</tbody></table></div></div>
-    <div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 "Líquido a pagar" vem calculado (proventos − descontos), mas você pode digitar o líquido exato do contracheque (INSS/IRRF do empregado entram nos Descontos). A guia GPS/INSS retido lança em 🏛️ Impostos.</div>`
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 "Líquido a pagar" já vem com o INSS de 11% descontado automaticamente para RPA (VT/VA não entram aqui — são pagos à parte, integrais). Você pode digitar o líquido exato do contracheque se for diferente. A guia GPS/INSS retido lança em 🏛️ Impostos. Use o 🗑️ pra remover quem apareceu no mês por engano — o cadastro dele não é afetado.</div>`
     :'<div class="card" style="text-align:center;padding:24px;color:var(--text3);">Cadastre colaboradores ativos primeiro.</div>';
   _fmTotais();
 }
@@ -2101,6 +2117,12 @@ function fecharFolhaMes(){
     // v15: FGTS/INSS entram pela GUIA lançada em Contas a Pagar
     // (botão "🏛️ Ratear guia pela folha" divide entre os contratos)
     // v14: VT/VR não são gerados pela folha — o custo entra pela compra rateada
+    function _fmRemoverLinha(i){
+  if(!confirm('Remover '+_fmItens[i].nome+' da folha deste mês?\n\nO cadastro dele não é afetado — ele continua aparecendo normalmente nos próximos meses.'))return;
+  _fmItens.splice(i,1);
+  salvarFolhaMes(true);
+  renderFolhaMes();
+}
   });
   salvarERP();renderFolhaMes();
   alert('✅ Folha fechada! Salários gerados em Contas a Pagar.\n\n📌 Quando as GUIAS chegarem (FGTS/INSS), lance cada uma em Contas a Pagar e use o botão 🏛️ Ratear guia pela folha.\n💜 E transfira o TOTAL PROVISÃO para a conta virtual Provisão RH.');
@@ -2932,15 +2954,43 @@ function imprimirProposta(p){
   const w=window.open('','_blank');w.document.write(html);w.document.close();
 }
 
+function preencherRecRpaDaFolha(){
+  const rpaId=document.getElementById('mrb-rpa').value;const comp=document.getElementById('mrb-rpa-comp').value;
+  if(!rpaId||!comp){calcRecRpa();return;}
+  const folha=ERP.folhas.find(f=>f.comp===comp);
+  const it=folha&&folha.itens.find(x=>x.colabId===rpaId);
+  if(it){
+    document.getElementById('mrb-rpa-base').value=it.base||0;
+    document.getElementById('mrb-rpa-adic').value=(Number(it.he||0)+Number(it.not||0)+Number(it.peric||0)+Number(it.outros||0))||0;
+    document.getElementById('mrb-rpa-insal').value=it.insal||0;
+  }
+  calcRecRpa();
+}
+function calcRecRpa(){
+  const base=Number(document.getElementById('mrb-rpa-base')?.value||0);
+  const adic=Number(document.getElementById('mrb-rpa-adic')?.value||0);
+  const insal=Number(document.getElementById('mrb-rpa-insal')?.value||0);
+  const bruto=base+adic+insal;const inss=Math.round(bruto*0.11*100)/100;const liq=bruto-inss;
+  const e=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
+  e('mrb-rpa-bruto',fmt(bruto));e('mrb-rpa-inss',fmt(inss));e('mrb-rpa-val',fmt(liq));
+}
 function gerarRecibo(){
   const cfg=ERP.config;let r={};
   if(tipoRec==='cliente'){const cliId=document.getElementById('mrb-cli').value;const cli=ERP.clientes.find(c=>c.id===cliId);r={up:Date.now(),id:gid(),tipo:'cliente',num:document.getElementById('mrb-num').value,cliId,cliNome:cli?.nome||'',cliCNPJ:cli?.cnpj||'',val:Number(document.getElementById('mrb-val').value||0),desc:document.getElementById('mrb-desc').value,comp:document.getElementById('mrb-comp').value,data:new Date().toISOString().slice(0,10)};}
-  else{const rpaId=document.getElementById('mrb-rpa').value;const rpa=ERP.colaboradores.find(c=>c.id===rpaId);r={up:Date.now(),id:gid(),tipo:'rpa',num:document.getElementById('mrb-rpa-num').value,rpaId,rpaNome:rpa?.nome||'',rpaCPF:rpa?.cpf||'',rpaPix:rpa?.pix||'',val:Number(document.getElementById('mrb-rpa-val').value||0),desc:document.getElementById('mrb-rpa-desc').value,comp:document.getElementById('mrb-rpa-comp').value,data:new Date().toISOString().slice(0,10)};}
+  else{
+    const rpaId=document.getElementById('mrb-rpa').value;const rpa=ERP.colaboradores.find(c=>c.id===rpaId);
+    const base=Number(document.getElementById('mrb-rpa-base').value||0);
+    const adic=Number(document.getElementById('mrb-rpa-adic').value||0);
+    const insal=Number(document.getElementById('mrb-rpa-insal').value||0);
+    const bruto=base+adic+insal;const inss=Math.round(bruto*0.11*100)/100;const liq=Math.round((bruto-inss)*100)/100;
+    r={up:Date.now(),id:gid(),tipo:'rpa',num:document.getElementById('mrb-rpa-num').value,rpaId,rpaNome:rpa?.nome||'',rpaCPF:rpa?.cpf||'',rpaPix:rpa?.pix||'',base,adic,insal,bruto,inss,val:liq,desc:document.getElementById('mrb-rpa-desc').value,comp:document.getElementById('mrb-rpa-comp').value,data:new Date().toISOString().slice(0,10)};
+  }
   ERP.recibos.push(r);salvarERP();fm('modal-recibo');imprimirRecibo(r);
+}
 }
 function imprimirRecibo(r){
   const cfg=ERP.config;const[ano,m]=r.comp.split('-');const compStr=MESES[Number(m)-1]+'/'+ano;const dataStr=new Date(r.data+'T12:00').toLocaleDateString('pt-BR');let html='';
-  if(r.tipo==='cliente'){html=`<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto;padding:24px;border:2px solid #1a4f7a;border-radius:12px;"><div style="display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:2px solid #1a4f7a;margin-bottom:16px;"><div style="font-size:40px;">🌀</div><div><div style="font-size:18px;font-weight:700;color:#1a4f7a;">${cfg.nome}</div><div style="font-size:10px;color:#5a6a7a;">QUALIDADE E EXCELÊNCIA | CNPJ: ${cfg.cnpj} | ${cfg.tel}</div></div><div style="margin-left:auto;text-align:right;"><div style="font-size:13px;font-weight:700;color:#1a4f7a;">Nº ${r.num}</div><div style="font-size:11px;color:#8a9aaa;">${dataStr}</div></div></div><div style="text-align:center;font-size:18px;font-weight:700;color:#1a4f7a;background:#e8f0f8;padding:10px;border-radius:8px;margin-bottom:16px;">RECIBO DE PRESTAÇÃO DE SERVIÇOS</div><div style="text-align:center;padding:16px;background:#eaf5ee;border-radius:8px;margin-bottom:14px;border:2px solid #9ad1b0;"><div style="font-size:32px;font-weight:700;color:#1e7e4a;">R$ ${Number(r.val).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div style="font-size:12px;color:#5a6a7a;">Referente a: ${compStr}</div></div><table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;"><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;width:35%;">Recebemos de:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${r.cliNome}</strong>${r.cliCNPJ?' — CNPJ: '+r.cliCNPJ:''}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Referente a:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.desc}</td></tr><tr><td style="padding:6px 8px;font-weight:700;color:#5a6a7a;">Competência:</td><td style="padding:6px 8px;">${compStr}</td></tr></table><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;"><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Prestador<br><strong>${cfg.nome}</strong><br>CNPJ: ${cfg.cnpj}</div><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Tomador<br><strong>${r.cliNome}</strong></div></div><div style="text-align:center;font-size:10px;color:#8a9aaa;margin-top:14px;border-top:1px solid #dde2ea;padding-top:10px;">${cfg.nome} | CNPJ: ${cfg.cnpj} | Recibo nº ${r.num} | ${dataStr}</div></div>`;}
+  if(r.tipo==='cliente'){html=`<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto;padding:24px;border:2px solid #1a4f7a;border-radius:12px;"><div style="display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:2px solid #1a4f7a;margin-bottom:16px;"><div style="font-size:40px;">🌀</div><div><div style="font-size:18px;font-weight:700;color:#1a4f7a;">${cfg.nome}</div><div style="font-size:10px;color:#5a6a7a;">QUALIDADE E EXCELÊNCIA | CNPJ: ${cfg.cnpj} | ${cfg.tel}</div></div><div style="margin-left:auto;text-align:right;"><div style="font-size:13px;font-weight:700;color:#1a4f7a;">Nº ${r.num}</div><div style="font-size:11px;color:#8a9aaa;">${dataStr}</div></div></div><div style="text-align:center;font-size:18px;font-weight:700;color:#1a4f7a;background:#e8f0f8;padding:10px;border-radius:8px;margin-bottom:16px;">RECIBO DE PRESTAÇÃO DE SERVIÇOS</div><div style="text-align:center;padding:16px;background:#eaf5ee;border-radius:8px;margin-bottom:14px;border:2px solid #9ad1b0;"><div style="font-size:32px;font-weight:700;color:#1e7e4a;">R$ ${Number(r.val).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div style="font-size:12px;color:#5a6a7a;">Referente a: ${compStr}</div></div><table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;"><div<tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;width:35%;">Recebemos de:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${r.cliNome}</strong>${r.cliCNPJ?' — CNPJ: '+r.cliCNPJ:''}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Referente a:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.desc}</td></tr><tr><td style="padding:6px 8px;font-weight:700;color:#5a6a7a;">Competência:</td><td style="padding:6px 8px;">${compStr}</td></tr></table> style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;"><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Prestador<br><strong>${cfg.nome}</strong><br>CNPJ: ${cfg.cnpj}</div><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Tomador<br><strong>${r.cliNome}</strong></div></div><div style="text-align:center;font-size:10px;color:#8a9aaa;margin-top:14px;border-top:1px solid #dde2ea;padding-top:10px;">${cfg.nome} | CNPJ: ${cfg.cnpj} | Recibo nº ${r.num} | ${dataStr}</div></div>`;}
   else{html=`<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto;padding:24px;border:2px solid #e67e22;border-radius:12px;"><div style="display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:2px solid #e67e22;margin-bottom:16px;"><div style="font-size:40px;">🌀</div><div><div style="font-size:18px;font-weight:700;color:#1a4f7a;">${cfg.nome}</div><div style="font-size:10px;color:#5a6a7a;">CNPJ: ${cfg.cnpj} | ${cfg.tel}</div></div><div style="margin-left:auto;text-align:right;"><div style="font-size:12px;font-weight:700;color:#e67e22;">RPA Nº ${r.num}</div><div style="font-size:11px;color:#8a9aaa;">${dataStr}</div></div></div><div style="text-align:center;font-size:18px;font-weight:700;color:#e67e22;background:#fef0e6;padding:10px;border-radius:8px;margin-bottom:16px;">RECIBO DE PAGAMENTO AUTÔNOMO (RPA)</div><div style="text-align:center;padding:16px;background:#fef0e6;border-radius:8px;margin-bottom:14px;border:2px solid #f5c06a;"><div style="font-size:32px;font-weight:700;color:#e67e22;">R$ ${Number(r.val).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div style="font-size:12px;color:#5a6a7a;">Competência: ${compStr}</div></div><table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;"><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;width:35%;">Prestador:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${r.rpaNome}</strong></td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">CPF:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.rpaCPF||'—'}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">PIX:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.rpaPix||'—'}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Tomador:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${cfg.nome}</strong> — CNPJ: ${cfg.cnpj}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Serviço:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.desc}</td></tr><tr><td style="padding:6px 8px;font-weight:700;color:#5a6a7a;">Competência:</td><td style="padding:6px 8px;">${compStr}</td></tr></table><p style="font-size:10px;color:#5a6a7a;background:#fef9e7;padding:8px;border-radius:6px;margin-bottom:14px;">Declaro ter recebido a importância acima pelos serviços prestados como profissional autônomo, ciente das minhas responsabilidades tributárias.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;"><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Prestador<br><strong>${r.rpaNome}</strong><br>CPF: ${r.rpaCPF||'—'}</div><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Responsável<br><strong>${cfg.nome}</strong></div></div></div>`;}
   document.getElementById('print-area').innerHTML=html;window.print();setTimeout(()=>document.getElementById('print-area').innerHTML='',1500);
 }

@@ -189,6 +189,17 @@ tr:hover td{background:#fafbff;}
 
     <!-- DRE -->
     <div class="page" id="page-dre">
+      <div class="filtros" style="margin-bottom:12px;">
+        <select id="dre-modo" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="_dreModoUI();renderDRE()">
+          <option value="mes">📅 Mês único</option>
+          <option value="acum">📈 Acumulado até o mês</option>
+          <option value="per">📆 Período (de/até)</option>
+        </select>
+        <select id="dre-mes" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderDRE()"></select>
+        <input type="month" id="dre-de" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;display:none;" onchange="renderDRE()">
+        <span id="dre-ate-sep" style="display:none;font-size:12px;color:var(--text2);align-self:center;">até</span>
+        <input type="month" id="dre-ate" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;display:none;" onchange="renderDRE()">
+      </div>
       <div class="card"><div class="card-title">DRE Gerencial — <span id="dre-per"></span></div><div id="dre-body"></div></div>
     </div>
 
@@ -213,10 +224,21 @@ tr:hover td{background:#fafbff;}
       <div id="rel-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;"></div>
     </div>
     <div class="page" id="page-centrocusto">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
         <strong style="font-size:15px;color:var(--brand)">Centro de Custo</strong>
-        <select id="cc-mes" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderCC()"></select>
+        <div class="filtros" style="margin:0;">
+          <select id="cc-modo" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="_ccModoUI();renderCC()">
+            <option value="mes">📅 Mês único</option>
+            <option value="acum">📈 Acumulado até o mês</option>
+            <option value="per">📆 Período (de/até)</option>
+          </select>
+          <select id="cc-mes" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;" onchange="renderCC()"></select>
+          <input type="month" id="cc-de" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;display:none;" onchange="renderCC()">
+          <span id="cc-ate-sep" style="display:none;font-size:12px;color:var(--text2);align-self:center;">até</span>
+          <input type="month" id="cc-ate" style="padding:7px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);font-size:13px;display:none;" onchange="renderCC()">
+        </div>
       </div>
+      <div id="cc-resumo" style="margin-bottom:12px;"></div>
       <div id="cc-body"></div>
     </div>
 
@@ -1102,14 +1124,81 @@ function renderDash(){
   document.getElementById('dash-venc').innerHTML=todos.length?todos.map(x=>{const a=vencStatus(x.venc,'pendente');const tipo=x.cliId||x.cliNome?'rec':'pag';return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);"><div><span class="badge ${tipo==='rec'?'b-green':'b-red'}" style="margin-right:6px;">${tipo==='rec'?'↓':'↑'}</span>${x.desc||x.cliNome||''} ${a.badge}</div><strong style="color:${tipo==='rec'?'var(--green)':'var(--red)'};">${fmt(x.val)}</strong></div>`;}).join(''):'<p style="color:var(--text3);font-size:13px;">Sem vencimentos próximos. ✅</p>';
 }
 
+// ===== HELPERS DE PERÍODO (Mês único / Acumulado / Período) =====
+// Menor competência já registrada em qualquer lançamento — usado como início do "acumulado"
+function _menorComp(){
+  let min=null;
+  const olhar=v=>{if(v&&/^\d{4}-\d{2}/.test(v)){const c=v.slice(0,7);if(!min||c<min)min=c;}};
+  ERP.receber.forEach(r=>{olhar(r.comp);olhar(r.venc);});
+  ERP.pagar.forEach(p=>{olhar(p.comp);olhar(p.venc);});
+  ERP.impostos.forEach(i=>olhar(i.comp));
+  ERP.vendas.forEach(v=>olhar(v.data));
+  ERP.movimentos.forEach(m=>{olhar(m.comp);olhar(m.data);});
+  ERP.estoqueMov.forEach(m=>olhar(m.data));
+  return min||getMes();
+}
+function _addMes(comp,n){
+  const [a,m]=comp.split('-').map(Number);
+  const d=new Date(a,m-1+n,1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+// Retorna {modo, ini, fim, label} lendo o seletor da tela (pref="cc" ou "dre")
+function _periodo(pref){
+  const modo=document.getElementById(pref+'-modo')?.value||'mes';
+  if(modo==='per'){
+    let de=document.getElementById(pref+'-de')?.value||'';
+    let ate=document.getElementById(pref+'-ate')?.value||'';
+    if(!de&&!ate){const m=getMes();de=m;ate=m;}
+    if(!de)de=ate;if(!ate)ate=de;
+    if(de>ate){const t=de;de=ate;ate=t;}
+    return {modo,ini:de,fim:ate,label:_mesLabel(de)+' a '+_mesLabel(ate)};
+  }
+  const mes=document.getElementById(pref+'-mes')?.value||getMes();
+  if(modo==='acum'){
+    return {modo,ini:_menorComp(),fim:mes,label:'Acumulado até '+_mesLabel(mes)};
+  }
+  return {modo,ini:mes,fim:mes,label:_mesLabel(mes)};
+}
+// Testa se uma competência 'YYYY-MM' cai dentro do período
+function _dentro(comp,per){
+  if(!comp)return false;
+  const c=comp.slice(0,7);
+  return c>=per.ini&&c<=per.fim;
+}
+// Competência efetiva de um lançamento a pagar (usa comp; senão o mês do vencimento)
+function _compPagar(p){return (p.comp||p.venc?.slice(0,7)||'');}
+function _compReceber(r){return (r.comp||r.venc?.slice(0,7)||'');}
+function _ccModoUI(){
+  const modo=document.getElementById('cc-modo').value;
+  document.getElementById('cc-mes').style.display=(modo==='per')?'none':'';
+  document.getElementById('cc-de').style.display=(modo==='per')?'':'none';
+  document.getElementById('cc-ate').style.display=(modo==='per')?'':'none';
+  document.getElementById('cc-ate-sep').style.display=(modo==='per')?'':'none';
+  if(modo==='per'){
+    if(!document.getElementById('cc-de').value)document.getElementById('cc-de').value=getMes();
+    if(!document.getElementById('cc-ate').value)document.getElementById('cc-ate').value=getMes();
+  }
+}
+function _dreModoUI(){
+  const modo=document.getElementById('dre-modo').value;
+  document.getElementById('dre-mes').style.display=(modo==='per')?'none':'';
+  document.getElementById('dre-de').style.display=(modo==='per')?'':'none';
+  document.getElementById('dre-ate').style.display=(modo==='per')?'':'none';
+  document.getElementById('dre-ate-sep').style.display=(modo==='per')?'':'none';
+  if(modo==='per'){
+    if(!document.getElementById('dre-de').value)document.getElementById('dre-de').value=getMes();
+    if(!document.getElementById('dre-ate').value)document.getElementById('dre-ate').value=getMes();
+  }
+}
+
 // DRE
 function renderDRE(){
-  const mes=getMes();const[ano,m]=mes.split('-');
-  document.getElementById('dre-per').textContent=MESES[Number(m)-1]+' '+ano;
-  const rec=ERP.receber.filter(r=>r.comp===mes||r.venc?.slice(0,7)===mes);
-  const pag=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes);
-  const imp=ERP.impostos.filter(i=>i.comp===mes);
-  const movs=ERP.movimentos.filter(mv=>mv.comp===mes);
+  const per=_periodo('dre');
+  document.getElementById('dre-per').textContent=per.label;
+  const rec=ERP.receber.filter(r=>_dentro(_compReceber(r),per));
+  const pag=ERP.pagar.filter(p=>_dentro(_compPagar(p),per));
+  const imp=ERP.impostos.filter(i=>_dentro(i.comp,per));
+  const movs=ERP.movimentos.filter(mv=>_dentro(mv.comp||mv.data,per));
   const recBruta=rec.reduce((s,r)=>s+Number(r.val||0),0);
   const ret=rec.reduce((s,r)=>s+Number(r.val||0)*Number(r.retP||0)/100,0);
   const das=recBruta*Number(ERP.config.aliq||4.5)/100;
@@ -1186,33 +1275,38 @@ function _rateiosDoColab(c){
   if(c.ccId)return [{ccId:c.ccId,pct:100}];
   return [{ccId:'',pct:100}];
 }
-function _detalheRateioPorCliente(cliId){
+function _detalheRateioPorCliente(cliId,per){
   const linhas=[];
-  const mesCC=getMes();
-  const folhaReal=(ERP.folhas||[]).find(f=>f.comp===mesCC&&f.fechada);
-  if(folhaReal){
-    folhaReal.itens.forEach(it=>{
-      const c=_fmCalcItem(it);
-      const cad=ERP.colaboradores.find(x=>x.id===it.colabId);
-      const rats=(cad&&cad.rateios&&cad.rateios.length)?cad.rateios
-        :((cad&&cad.ccId)?[{ccId:cad.ccId,pct:100}]
-        :((it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}]));
-      rats.forEach(r=>{
-        if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:it.nome+' 🧾',pct:Number(r.pct),val:(c.proventos+c.provTot)*Number(r.pct)/100});
+  // Percorre cada mês do período; onde há folha fechada usa a folha real, senão usa estimativa do cadastro
+  let comp=per.ini;
+  while(comp<=per.fim){
+    const folhaReal=(ERP.folhas||[]).find(f=>f.comp===comp&&f.fechada);
+    if(folhaReal){
+      folhaReal.itens.forEach(it=>{
+        const c=_fmCalcItem(it);
+        const cad=ERP.colaboradores.find(x=>x.id===it.colabId);
+        const rats=(cad&&cad.rateios&&cad.rateios.length)?cad.rateios
+          :((cad&&cad.ccId)?[{ccId:cad.ccId,pct:100}]
+          :((it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}]));
+        rats.forEach(r=>{
+          if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:it.nome+(per.multi?' 🧾 '+_mesLabelCurto(comp):' 🧾'),pct:Number(r.pct),val:(c.proventos+c.provTot)*Number(r.pct)/100});
+        });
       });
-    });
-    return linhas;
+    } else {
+      ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
+        const remC=remCol(c)||0;
+        const benefC=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
+        const custo=(c.tipo==='CLT'?(remC*1.08+Number(c.provMes||((remC*1.333/12)+(remC/12)+(remC*0.5/12)+(remC*Number(ERP.config.jurPerc||5)/100)))):remC)+benefC;
+        _rateiosDoColab(c).forEach(r=>{
+          if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:c.nome+(per.multi?' '+_mesLabelCurto(comp):''),pct:Number(r.pct),val:custo*Number(r.pct)/100});
+        });
+      });
+    }
+    comp=_addMes(comp,1);
   }
-  ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
-    const remC=remCol(c)||0;
-    const benefC=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
-    const custo=(c.tipo==='CLT'?(remC*1.08+Number(c.provMes||((remC*1.333/12)+(remC/12)+(remC*0.5/12)+(remC*Number(ERP.config.jurPerc||5)/100)))):remC)+benefC;
-    _rateiosDoColab(c).forEach(r=>{
-      if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:c.nome,pct:Number(r.pct),val:custo*Number(r.pct)/100});
-    });
-  });
   return linhas;
 }
+function _mesLabelCurto(comp){const [a,m]=comp.split('-');return MESES[Number(m)-1].slice(0,3)+'/'+a.slice(2);}
 function _rateiosDoImposto(i){
   if(i.rateios&&i.rateios.length)return i.rateios;
   return [{ccId:i.ccId||'',pct:100}];
@@ -1222,39 +1316,43 @@ function _rateiosDoPagar(p){
   if(p.ccId)return [{ccId:p.ccId,pct:100}];
   return [{ccId:'',pct:100}];
 }
-function _detalheRateioPagarPorCliente(cliId,mes){
+function _detalheRateioPagarPorCliente(cliId,per){
   const linhas=[];
-  ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes).forEach(p=>{
+  ERP.pagar.filter(p=>_dentro(_compPagar(p),per)).forEach(p=>{
     if(p.estoque||p.folha||p.capital)return;
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
-      if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc,pct:Number(r.pct),val:valor*Number(r.pct)/100});
+      if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc+(per.multi?' · '+_mesLabelCurto(_compPagar(p)):''),pct:Number(r.pct),val:valor*Number(r.pct)/100});
     });
   });
   return linhas;
 }
 function renderCC(){
-  const sel=document.getElementById('cc-mes');const mes=sel?.value||getMes();const el=document.getElementById('cc-body');let html='';
+  const per=_periodo('cc');per.multi=(per.ini!==per.fim);
+  const el=document.getElementById('cc-body');let html='';
+  const res=document.getElementById('cc-resumo');
+  let gReceita=0,gCusto=0,gMargem=0;
   ERP.clientes.forEach(cli=>{
-    const rec=ERP.receber.filter(r=>r.cliId===cli.id&&(r.comp===mes||r.venc?.slice(0,7)===mes));
+    const rec=ERP.receber.filter(r=>r.cliId===cli.id&&_dentro(_compReceber(r),per));
     const receita=rec.reduce((s,r)=>s+Number(r.val||0),0);
     const ret=rec.reduce((s,r)=>s+Number(r.val||0)*Number(r.retP||0)/100,0);
-    const pagLinhas=_detalheRateioPagarPorCliente(cli.id,mes);
+    const pagLinhas=_detalheRateioPagarPorCliente(cli.id,per);
     const totalPag=pagLinhas.reduce((s,p)=>s+p.val,0);
     const imp=[];
-    ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').forEach(i=>{
+    ERP.impostos.filter(i=>_dentro(i.comp,per)&&i.ret!=='sim').forEach(i=>{
       _rateiosDoImposto(i).forEach(r=>{
-        if(r.ccId===cli.id&&Number(r.pct)>0)imp.push({tipo:i.tipo,desc:i.desc,val:Number(i.val||0)*Number(r.pct)/100,pct:Number(r.pct)});
+        if(r.ccId===cli.id&&Number(r.pct)>0)imp.push({tipo:i.tipo,desc:i.desc+(per.multi?' · '+_mesLabelCurto(i.comp):''),val:Number(i.val||0)*Number(r.pct)/100,pct:Number(r.pct)});
       });
     });
-    const rateioLinhas=_detalheRateioPorCliente(cli.id);
+    const rateioLinhas=_detalheRateioPorCliente(cli.id,per);
     const maoObra=rateioLinhas.reduce((s,r)=>s+r.val,0);
-    const matLinhas=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes&&m.ccId===cli.id)
-      .map(m=>({desc:(m.epi?'EPI: ':'Material: ')+m.prodNome+' ('+m.qtd+' '+(m.uni||'')+')',val:Number(m.custoTotal||0)}));
+    const matLinhas=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&_dentro((m.data||'').slice(0,7),per)&&m.ccId===cli.id)
+      .map(m=>({desc:(m.epi?'EPI: ':'Material: ')+m.prodNome+' ('+m.qtd+' '+(m.uni||'')+')'+(per.multi?' · '+_mesLabelCurto((m.data||'').slice(0,7)):''),val:Number(m.custoTotal||0)}));
     const matTot=matLinhas.reduce((s,m)=>s+m.val,0);
     const custos=totalPag+imp.reduce((s,i)=>s+Number(i.val||0),0)+maoObra+matTot;
     const das=receita*Number(ERP.config.aliq||4.5)/100;
     const margem=receita-ret-das-custos;const perc=receita>0?margem/receita*100:0;
+    gReceita+=receita;gCusto+=ret+das+custos;gMargem+=margem;
     html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow);">
       <div style="background:var(--brand);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;"><strong>${cli.nome}</strong><span style="font-size:11px;opacity:.8;">${cli.tipo||''}</span></div>
       <div style="padding:12px 16px;">
@@ -1269,18 +1367,32 @@ function renderCC(){
       </div>
     </div>`;
   });
-  const pagAdmLinhas=_detalheRateioPagarPorCliente('',mes);
+  const pagAdmLinhas=_detalheRateioPagarPorCliente('',per);
   const impAdm=[];
-  ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').forEach(i=>{
+  ERP.impostos.filter(i=>_dentro(i.comp,per)&&i.ret!=='sim').forEach(i=>{
     _rateiosDoImposto(i).forEach(r=>{
-      if(!r.ccId&&Number(r.pct)>0)impAdm.push({tipo:i.tipo,desc:i.desc,val:Number(i.val||0)*Number(r.pct)/100,pct:Number(r.pct)});
+      if(!r.ccId&&Number(r.pct)>0)impAdm.push({tipo:i.tipo,desc:i.desc+(per.multi?' · '+_mesLabelCurto(i.comp):''),val:Number(i.val||0)*Number(r.pct)/100,pct:Number(r.pct)});
     });
   });
-  const rateioAdmLinhas=_detalheRateioPorCliente('');
-  const matAdmLinhas=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes&&!m.ccId)
-    .map(m=>({desc:(m.epi?'EPI: ':'Material: ')+m.prodNome+' ('+m.qtd+' '+(m.uni||'')+')',val:Number(m.custoTotal||0)}));
+  const rateioAdmLinhas=_detalheRateioPorCliente('',per);
+  const matAdmLinhas=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&_dentro((m.data||'').slice(0,7),per)&&!m.ccId)
+    .map(m=>({desc:(m.epi?'EPI: ':'Material: ')+m.prodNome+' ('+m.qtd+' '+(m.uni||'')+')'+(per.multi?' · '+_mesLabelCurto((m.data||'').slice(0,7)):''),val:Number(m.custoTotal||0)}));
   const totAdm=pagAdmLinhas.reduce((s,p)=>s+p.val,0)+impAdm.reduce((s,i)=>s+Number(i.val||0),0)+rateioAdmLinhas.reduce((s,r)=>s+r.val,0)+matAdmLinhas.reduce((s,m)=>s+m.val,0);
+  gCusto+=totAdm;gMargem-=totAdm;
   if(totAdm>0)html+=`<div style="background:var(--surface);border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;"><div style="background:#5a6a7a;color:#fff;padding:12px 16px;"><strong>⚙️ ADM Geral</strong></div><div style="padding:12px 16px;">${rateioAdmLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span style="color:var(--red)">${fmt(r.val)}</span></div>`).join('')}${pagAdmLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}${impAdm.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>${p.desc||p.tipo||''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')}${matAdmLinhas.map(m=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>📦 ${m.desc}</span><span style="color:var(--red)">${fmt(m.val)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Total ADM</span><strong style="color:var(--red)">${fmt(totAdm)}</strong></div></div></div>`;
+  // Barra de resumo consolidado (todos os clientes juntos) — "ver junto"
+  if(res){
+    const margPerc=gReceita>0?gMargem/gReceita*100:0;
+    res.innerHTML=`<div style="background:var(--brand-light);border:1.5px solid var(--brand);border-radius:var(--r);padding:12px 16px;">
+      <div style="font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">📊 Consolidado — ${per.label}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;">
+        <div><div style="font-size:10px;color:var(--text3);">Receita total</div><div style="font-size:17px;font-weight:800;color:var(--green)">${fmt(gReceita)}</div></div>
+        <div><div style="font-size:10px;color:var(--text3);">Custos + impostos</div><div style="font-size:17px;font-weight:800;color:var(--red)">${fmt(gCusto)}</div></div>
+        <div><div style="font-size:10px;color:var(--text3);">Margem total</div><div style="font-size:17px;font-weight:800;color:${gMargem>=0?'var(--green)':'var(--red)'}">${fmt(gMargem)}</div></div>
+        <div><div style="font-size:10px;color:var(--text3);">Margem %</div><div style="font-size:17px;font-weight:800;color:${margPerc>=0?'var(--green)':'var(--red)'}">${fmtP(margPerc)}</div></div>
+      </div>
+    </div>`;
+  }
   el.innerHTML=html||'<div class="info-box blue">Cadastre clientes para ver o centro de custo.</div>';
 }
 
@@ -1976,8 +2088,14 @@ function renderFolhaMes(){
   const dis=fechada?'disabled':'';
   const inp=(i,campo,val)=>`<input type="number" step="0.01" value="${val||0}" ${dis} style="width:86px;padding:5px 6px;font-size:12px;" oninput="_fmItens[${i}].${campo}=Number(this.value)||0;_fmAtualizarLinha(${i})">`;
   document.getElementById('fm-tabela').innerHTML=_fmItens.length?`<div class="card" style="padding:0;"><div class="table-wrap"><table>
-    <thead><tr><th>Colaborador</th><th>Base (R$)</th><th>H. Extra</th><th>Ad. Not.</th><th>Insalub.</th><th>Peric.</th><th>DSR/Refl.</th><th>Outros</th><th>Descontos</th><th>Proventos</th><th>INSS 11% (RPA)</th><th>Líquido a pagar</th><th>FGTS 8%</th><th>Provisões</th><th>Custo total</th><th></th></tr></thead>
+    <thead><tr><th>Colaborador</th><th>Base (R$)</th><th>H. Extra</th><th>Ad. Not.</th><th>Insalub.</th><th>Peric.</th><th>DSR/Refl.</th><th>Outros</th><th>Descontos</th><th>Proventos</th><th>INSS 11% (RPA)</th><th>Líquido a pagar</th><th>Pagar em</th><th>FGTS 8%</th><th>Provisões</th><th>Custo total</th><th></th></tr></thead>
     <tbody>${_fmItens.map((it,i)=>{const c=_fmCalcItem(it);
+      const pagCell=it.tipo==='RPA'
+        ? `<select ${dis} style="padding:4px 6px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;" onchange="_fmItens[${i}].pagProx=(this.value==='prox');_fmTotais()">
+             <option value="mes" ${!it.pagProx?'selected':''}>Mesmo mês (avulso)</option>
+             <option value="prox" ${it.pagProx?'selected':''}>Mês seguinte</option>
+           </select>`
+        : `<span style="font-size:10px;color:var(--text3);">mês da folha</span>`;
       return`<tr>
         <td><strong>${it.nome}</strong><div style="font-size:10px;color:var(--text3)">${it.tipo} · ${it.func||'—'}</div></td>
         <td>${inp(i,'base',it.base)}</td><td>${inp(i,'he',it.he)}</td><td>${inp(i,'not',it.not)}</td>
@@ -1986,12 +2104,13 @@ function renderFolhaMes(){
         <td id="fm-prov-${i}" style="font-weight:700;">${fmt(c.proventos)}</td>
         <td id="fm-inss-${i}" style="color:var(--orange);">${it.tipo==='RPA'?fmt(c.inssRpa):'—'}</td>
         <td><input type="number" step="0.01" id="fm-liq-${i}" value="${(it._liqManual&&it.liquido!=null?Number(it.liquido):c.liquidoAuto).toFixed(2)}" ${dis} style="width:96px;padding:5px 6px;font-size:12px;font-weight:700;" oninput="_fmItens[${i}].liquido=Number(this.value)||0;_fmItens[${i}]._liqManual=true;_fmTotais()"></td>
+        <td>${pagCell}</td>
         <td id="fm-fgts-${i}">${fmt(c.fgts)}</td>
         <td id="fm-provt-${i}" style="color:var(--purple);font-weight:700;">${fmt(c.provTot)}</td>
         <td id="fm-cust-${i}" style="color:var(--red);font-weight:700;">${fmt(c.custoTotal)}</td>
         <td>${dis?'':`<button class="btn btn-danger btn-sm" onclick="_fmRemoverLinha(${i})" title="Remover este colaborador SÓ deste mês — não mexe no cadastro">🗑️</button>`}</td>
       </tr>`;}).join('')}</tbody></table></div></div>
-    <div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 "Líquido a pagar" já vem com o INSS de 11% descontado automaticamente para RPA (VT/VA não entram aqui — são pagos à parte, integrais). Você pode digitar o líquido exato do contracheque se for diferente. A guia GPS/INSS retido lança em 🏛️ Impostos. Use o 🗑️ pra remover quem apareceu no mês por engano — o cadastro dele não é afetado.</div>`
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 "Líquido a pagar" já vem com o INSS de 11% descontado automaticamente para RPA (VT/VA não entram aqui — são pagos à parte, integrais). Coluna <strong>"Pagar em"</strong>: escolha <strong>Mês seguinte</strong> pro RPA mensalista (trabalha neste mês, recebe no próximo — a conta a pagar e o Centro de Custo caem no mês do pagamento). Deixe <strong>Mesmo mês</strong> pra diária avulsa. Use o 🗑️ pra remover quem apareceu por engano.</div>`
     :'<div class="card" style="text-align:center;padding:24px;color:var(--text3);">Cadastre colaboradores ativos primeiro.</div>';
   _fmTotais();
 }
@@ -2019,8 +2138,8 @@ function fecharFolhaMes(){
   if(!_fmItens.length)return;
   if(!confirm('Fechar a folha de '+_mesLabel(mes)+'?\n\nSerão geradas as contas a pagar (salário líquido + FGTS) de cada colaborador, com os rateios por condomínio.'))return;
   if(!salvarFolhaMes(true))return;
-  // Segurança contra duplicação: remove qualquer salário "folha real" que já exista neste mês antes de gerar de novo
-  const remanescentes=ERP.pagar.filter(p=>p.folha&&(p.comp||p.venc?.slice(0,7))===mes);
+  // Segurança contra duplicação: remove qualquer salário desta folha (por folhaComp; cai back no comp p/ lançamentos antigos)
+  const remanescentes=ERP.pagar.filter(p=>p.folha&&((p.folhaComp||p.comp||p.venc?.slice(0,7))===mes));
   if(remanescentes.length){
     remanescentes.forEach(p=>_marcarExcluido('pagar',p.id));
     const ids=new Set(remanescentes.map(p=>p.id));
@@ -2028,20 +2147,26 @@ function fecharFolhaMes(){
   }
   const f=ERP.folhas.find(x=>x.comp===mes);
   f.fechada=true;f.up=Date.now();
+  let algumProx=false;
   _fmItens.forEach(it=>{
     const c=_fmCalcItem(it);
     const liq=(it._liqManual&&it.liquido!=null)?Number(it.liquido):c.liquidoAuto;
     const rat=(it.rateios&&it.rateios.length)?it.rateios:undefined;
-    if(liq>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,desc:`Salário — ${it.nome} (${it.tipo}) · folha real`,catNome:it.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:Math.round(liq*100)/100,venc:mes+'-05',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:mes});
+    // RPA marcado como "mês seguinte": competência de pagamento e vencimento vão para o mês seguinte
+    const pagProx=(it.tipo==='RPA'&&it.pagProx);
+    const compPagto=pagProx?_addMes(mes,1):mes;
+    if(pagProx)algumProx=true;
+    const tag=pagProx?' · folha real (comp. '+_mesLabelCurto(mes)+')':' · folha real';
+    if(liq>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,folhaComp:mes,desc:`Salário — ${it.nome} (${it.tipo})${tag}`,catNome:it.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:Math.round(liq*100)/100,venc:compPagto+'-05',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:compPagto});
   });
   salvarERP();renderFolhaMes();
-  alert('✅ Folha fechada! Salários gerados em Contas a Pagar.\n\n📌 Quando as GUIAS chegarem (FGTS/INSS), lance cada uma em Contas a Pagar e use o botão 🏛️ Ratear guia pela folha.\n💜 E transfira o TOTAL PROVISÃO para a conta virtual Provisão RH.');
+  alert('✅ Folha fechada! Salários gerados em Contas a Pagar.'+(algumProx?'\n\n📅 Os RPA marcados como "Mês seguinte" foram lançados com vencimento e competência no mês seguinte — aparecem no Centro de Custo/DRE do mês em que você paga.':'')+'\n\n📌 Quando as GUIAS chegarem (FGTS/INSS), lance cada uma em Contas a Pagar e use o botão 🏛️ Ratear guia pela folha.\n💜 E transfira o TOTAL PROVISÃO para a conta virtual Provisão RH.');
 }
 function reabrirFolhaMes(){
   const mes=getMes();
   const f=ERP.folhas.find(x=>x.comp===mes);if(!f)return;
-  // Quais lançamentos "folha real" deste mês serão removidos ao reabrir
-  const antigos=ERP.pagar.filter(p=>p.folha&&(p.comp||p.venc?.slice(0,7))===mes);
+  // Quais lançamentos "folha real" desta folha serão removidos ao reabrir (inclui RPA que caiu no mês seguinte)
+  const antigos=ERP.pagar.filter(p=>p.folha&&((p.folhaComp||p.comp||p.venc?.slice(0,7))===mes));
   const pendentes=antigos.filter(p=>p.st==='pendente');
   const jaPagos=antigos.filter(p=>p.st==='pago');
   let aviso='Reabrir a folha de '+_mesLabel(mes)+'?\n\n';
@@ -3079,6 +3204,7 @@ carregarERP();
 carregarURLErp();
 popularMeses('filtro-mes');
 popularMeses('cc-mes');
+popularMeses('dre-mes');
 if(!ERP.contas.some(c=>c.tipo==='provisao')){
   ERP.contas.push({up:Date.now(),id:gid(),nome:'Provisão RH',tipo:'provisao',banco:'',saldo:0});
 }

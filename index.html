@@ -121,7 +121,6 @@ tr:hover td{background:#fafbff;}
 </style>
 </head>
 <body>
-
 <div id="sidebar">
   <div class="logo"><h1>💼 MJL ERP</h1><p>Gestão Financeira v2</p></div>
   <nav>
@@ -476,7 +475,6 @@ tr:hover td{background:#fafbff;}
 
   </div>
 </div>
-
 <!-- MODAIS -->
 <div id="modal-cli" class="modal-overlay hidden"><div class="modal">
   <div class="modal-hdr"><h3 id="mcl-tit">Novo Cliente</h3><button class="modal-cls" onclick="fm('modal-cli')">×</button></div>
@@ -913,7 +911,6 @@ let _syncDebounceTimer=null;
 var _pendenteEnvio=false;
 function salvarERP(){
   localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
-  // Debounce: agrupa varios salvamentos rapidos num unico ciclo de sync.
   if(_syncDebounceTimer)clearTimeout(_syncDebounceTimer);
   _syncDebounceTimer=setTimeout(function(){enviarParaSheets();},1200);
 }
@@ -925,27 +922,6 @@ function temDados(){
          ERP.servicos.length>0||ERP.movimentos.length>0;
 }
 
-// ================================================================
-// SINCRONIZACAO POR MESCLAGEM (nao e mais "substituir", e "juntar")
-// ================================================================
-// MOTIVO DA MUDANCA: mesmo com debounce e espera da busca inicial, uma aba
-// em segundo plano (outra guia, outro dispositivo) podia ficar com uma
-// copia desatualizada na memoria por horas -- o navegador pausa os timers
-// de abas em segundo plano, entao ela nunca recebia as novidades. Quando
-// essa aba era usada de novo e salvava qualquer coisa, ela reenviava sua
-// copia velha por cima da nova, apagando tudo que nao conhecia. Isso
-// acontecia mesmo esperando bastante tempo, porque o problema nunca foi
-// velocidade -- foi a aba nunca ter buscado a versao atual antes de enviar.
-//
-// A partir de agora, TODO envio ao Sheets segue este ciclo, sem excecao:
-//   1) busca a versao atual do Sheets agora mesmo (nao usa cache antigo)
-//   2) mescla: comeca do que esta no Sheets, remove so o que foi excluido
-//      de proposito (marcado com "tombstone"), e adiciona/atualiza com o
-//      que esta na tela agora
-//   3) so DEPOIS envia o resultado mesclado
-// Um registro so desaparece do Sheets se alguem realmente clicou em excluir
-// -- nunca mais por uma aba simplesmente nao conhecer aquele registro.
-
 function _carregarExcluidos(){
   try{const r=localStorage.getItem('mjl_erp_excluidos');return r?JSON.parse(r):{};}catch(e){return {};}
 }
@@ -954,12 +930,11 @@ function _marcarExcluido(cat,id){
   const ex=_carregarExcluidos();
   if(!ex[cat])ex[cat]={};
   ex[cat][id]=Date.now();
-  const limite=Date.now()-30*24*60*60*1000; // esquece exclusoes com mais de 30 dias
+  const limite=Date.now()-30*24*60*60*1000;
   Object.keys(ex).forEach(function(c){Object.keys(ex[c]).forEach(function(k){if(ex[c][k]<limite)delete ex[c][k];});});
   localStorage.setItem('mjl_erp_excluidos',JSON.stringify(ex));
 }
 function _mesclarComServidor(serverData){
-  // Absorve exclusões feitas em OUTROS dispositivos (tombstones do servidor)
   if(serverData&&serverData.excluidos){
     const exLocal=_carregarExcluidos();
     Object.keys(serverData.excluidos).forEach(function(cat){
@@ -981,8 +956,6 @@ function _mesclarComServidor(serverData){
       if(!item||!item.id)return;
       if(excluidos[cat]&&excluidos[cat][item.id])return;
       const srv=map.get(item.id);
-      // Se os dois têm data de atualização, vence o MAIS NOVO — uma aba/celular
-      // desatualizado nunca mais sobrescreve uma edição mais recente.
       if(srv&&Number(srv.up||0)>Number(item.up||0))return;
       map.set(item.id,item);
     });
@@ -991,24 +964,21 @@ function _mesclarComServidor(serverData){
   resultado.config=(ERP.config&&Object.keys(ERP.config).length)?ERP.config:((serverData&&serverData.config)||ERP.config);
   return resultado;
 }
-// ================================================================
 
 function enviarParaSheets(){
   var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
   if(!url) return;
-  if(!navigator.onLine){_pendenteEnvio=true;var so=document.getElementById('sync-status');if(so){so.textContent='\ud83d\udcf4 Offline — alterações salvas no aparelho. Enviarei ao Sheets assim que a internet voltar.';so.style.color='var(--text3)';}return;}
+  if(!navigator.onLine){_pendenteEnvio=true;var so=document.getElementById('sync-status');if(so){so.textContent='📴 Offline — alterações salvas no aparelho. Enviarei ao Sheets assim que a internet voltar.';so.style.color='var(--text3)';}return;}
   if(!temDados()) return;
   const st=document.getElementById('sync-status');
-  if(st){st.textContent='\u2601\ufe0f Confirmando dados atuais do Sheets antes de enviar...';st.style.color='var(--text3)';}
+  if(st){st.textContent='☁️ Confirmando dados atuais do Sheets antes de enviar...';st.style.color='var(--text3)';}
   fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})
     .catch(function(){return null;})
     .then(function(serverData){
       if(serverData===null){
-        // NÃO conseguiu ler a versão atual do Sheets — enviar agora poderia
-        // apagar dados que só existem lá. Aborta e tenta de novo depois.
         _pendenteEnvio=true;
-        if(st){st.textContent='\u26a0\ufe0f Sem resposta do Sheets — envio adiado para proteger seus dados. Tentarei de novo automaticamente.';st.style.color='var(--red)';}
+        if(st){st.textContent='⚠️ Sem resposta do Sheets — envio adiado para proteger seus dados. Tentarei de novo automaticamente.';st.style.color='var(--red)';}
         return;
       }
       const mesclado=_mesclarComServidor(serverData||{});
@@ -1026,11 +996,11 @@ function enviarParaSheets(){
       return fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
         .then(function(){
           _pendenteEnvio=false;
-          if(st){st.textContent='\u2601\ufe0f Enviado ao Sheets '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
+          if(st){st.textContent='☁️ Enviado ao Sheets '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
         })
         .catch(function(){
           _pendenteEnvio=true;
-          if(st){st.textContent='\u26a0\ufe0f Falha ao enviar para o Sheets -- verifique a conexao ou a URL em Configuracoes.';st.style.color='var(--red)';}
+          if(st){st.textContent='⚠️ Falha ao enviar para o Sheets -- verifique a conexao ou a URL em Configuracoes.';st.style.color='var(--red)';}
         });
     });
 }
@@ -1043,9 +1013,7 @@ function _migrarV18(){
   let n=0;
   (ERP.pagar||[]).forEach(p=>{
     const d=(p.desc||'').toLowerCase();
-    // 1) Contas de folha geradas antes da flag → marca p/ não contar 2x no CC
     if(!p.folha&&(d.includes('folha real')||((d.startsWith('salário')||d.startsWith('salario')||d.startsWith('fgts'))&&!p.estoque))){p.folha=true;n++;}
-    // 2) Aportes/retiradas lançados por engano em Contas a Pagar → marca como capital
     if(d.includes('aporte')||d.includes('retirada de capital')||d.includes('pró-labore aporte')){p.capital=true;p.folha=false;n++;}
   });
   localStorage.setItem('mjl_erp_migr_v18','1');
@@ -1053,7 +1021,6 @@ function _migrarV18(){
 }
 function gid(){
   if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();
-  // Fallback com contador para garantir unicidade mesmo em loops rápidos
   gid._seq=(gid._seq||0)+1;
   return Date.now().toString(36)+'-'+gid._seq+'-'+Math.random().toString(36).slice(2,7);
 }
@@ -1112,9 +1079,6 @@ function renderDash(){
   const das=recBruta*Number(ERP.config.aliq||4.5)/100;
   const resultado=(recBruta-ret-das)-custos;
   const marg=recBruta>0?resultado/recBruta*100:0;
-  // Antes somava TODOS os meses pendentes (histórico inteiro). Agora reflete
-  // só o mês selecionado no filtro do topo, igual à Receita Bruta acima —
-  // assim um contrato encerrado ou pendências antigas não inflam o card.
   const pend=recMes.filter(r=>r.st==='pendente').reduce((s,r)=>s+Number(r.val||0),0);
   const atras=recMes.filter(r=>r.st==='atraso').reduce((s,r)=>s+Number(r.val||0),0);
   const provSaldo=ERP.contas.filter(c=>c.tipo==='provisao').reduce((s,c)=>s+Number(c.saldo||0),0);
@@ -1217,10 +1181,6 @@ function renderFluxo(){
 }
 
 // CENTRO DE CUSTO
-// Rateio de colaboradores entre clientes (Centro de Custo). Colaboradores
-// antigos com só um "ccId" viram automaticamente um rateio de 100% pra
-// aquele cliente — não precisa reeditar ninguém. Isso NÃO afeta a Folha,
-// que continua gerando um lançamento único por colaborador.
 function _rateiosDoColab(c){
   if(c.rateios&&c.rateios.length)return c.rateios;
   if(c.ccId)return [{ccId:c.ccId,pct:100}];
@@ -1228,16 +1188,11 @@ function _rateiosDoColab(c){
 }
 function _detalheRateioPorCliente(cliId){
   const linhas=[];
-  // v13: se a FOLHA REAL do mês está fechada, o custo por cliente vem dela
-  // (apontamentos verdadeiros + VT/VR do mês). Senão, usa a estimativa do cadastro.
   const mesCC=getMes();
   const folhaReal=(ERP.folhas||[]).find(f=>f.comp===mesCC&&f.fechada);
   if(folhaReal){
     folhaReal.itens.forEach(it=>{
       const c=_fmCalcItem(it);
-      // v16: a DIVISÃO entre contratos vem sempre do CADASTRO ATUAL do
-      // colaborador (mudou o cadastro → a rentabilidade acompanha).
-      // A folha continua sendo a fonte dos VALORES do mês.
       const cad=ERP.colaboradores.find(x=>x.id===it.colabId);
       const rats=(cad&&cad.rateios&&cad.rateios.length)?cad.rateios
         :((cad&&cad.ccId)?[{ccId:cad.ccId,pct:100}]
@@ -1249,8 +1204,6 @@ function _detalheRateioPorCliente(cliId){
     return linhas;
   }
   ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
-    // v11: custo REAL por cliente = remuneração + FGTS 8% + provisões completas
-    // (férias+1/3, 13º, rescisão, jurídico). Sem INSS patronal (Anexo IV).
     const remC=remCol(c)||0;
     const benefC=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
     const custo=(c.tipo==='CLT'?(remC*1.08+Number(c.provMes||((remC*1.333/12)+(remC/12)+(remC*0.5/12)+(remC*Number(ERP.config.jurPerc||5)/100)))):remC)+benefC;
@@ -1260,9 +1213,6 @@ function _detalheRateioPorCliente(cliId){
   });
   return linhas;
 }
-// Mesmo padrão de rateio, agora para Contas a Pagar — uma despesa pode ser
-// dividida por % entre vários clientes (ex: internet compartilhada entre 2
-// contratos). Lançamentos antigos com só um ccId viram 100% automaticamente.
 function _rateiosDoImposto(i){
   if(i.rateios&&i.rateios.length)return i.rateios;
   return [{ccId:i.ccId||'',pct:100}];
@@ -1275,7 +1225,7 @@ function _rateiosDoPagar(p){
 function _detalheRateioPagarPorCliente(cliId,mes){
   const linhas=[];
   ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===mes).forEach(p=>{
-    if(p.estoque||p.folha||p.capital)return; // estoque→saída; folha→mão de obra; capital→só no caixa (evita distorcer resultado)
+    if(p.estoque||p.folha||p.capital)return;
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc,pct:Number(r.pct),val:valor*Number(r.pct)/100});
@@ -1299,7 +1249,6 @@ function renderCC(){
     });
     const rateioLinhas=_detalheRateioPorCliente(cli.id);
     const maoObra=rateioLinhas.reduce((s,r)=>s+r.val,0);
-    // Material do Almoxarifado consumido por este cliente no mês
     const matLinhas=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes&&m.ccId===cli.id)
       .map(m=>({desc:(m.epi?'EPI: ':'Material: ')+m.prodNome+' ('+m.qtd+' '+(m.uni||'')+')',val:Number(m.custoTotal||0)}));
     const matTot=matLinhas.reduce((s,m)=>s+m.val,0);
@@ -1346,8 +1295,6 @@ function abrirModalReceber(id){
     document.getElementById('mrec-cli').value=r.cliId||'';
     document.getElementById('mrec-comp').value=r.comp||'';
     document.getElementById('mrec-desc').value=r.desc||'';
-    // IMPORTANTE: usar valBase (valor sem os extras), não r.val (que já é o total).
-    // Antes isso pegava r.val direto, o que duplicava os extras ao reabrir e salvar de novo.
     document.getElementById('mrec-val').value=(r.valBase!=null?r.valBase:r.val)||'';
     document.getElementById('mrec-ret').value=r.retP||0;
     document.getElementById('mrec-venc').value=r.venc||'';
@@ -1355,7 +1302,6 @@ function abrirModalReceber(id){
     document.getElementById('mrec-drec').value=r.drec||'';
     document.getElementById('mrec-obs').value=r.obs||'';
     _extrasRec=(r.extras||[]).map(e=>({svId:e.svId||'',desc:e.desc||'',val:Number(e.val||0),qty:Number(e.qty||1)}));
-    // Mostra a caixa de extras se o cliente for de contrato fixo, ou se já existirem extras salvos
     const cliObj=ERP.clientes.find(c=>c.id===r.cliId);
     const box=document.getElementById('mrec-extras-box');
     if(box)box.style.display=(cliObj&&cliObj.tipo==='fixo')||_extrasRec.length?'block':'none';
@@ -1395,8 +1341,6 @@ function selExtraRec(i,sel){const sv=ERP.servicos.find(s=>s.id===sel.value);if(s
 function addExtraRec(){
   _extrasRec.push({svId:'',desc:'',val:0,qty:1});
   renderExtrasRec();
-  // Garante que a caixa fique visível assim que um extra é adicionado, mesmo
-  // que o cliente selecionado não seja tipo "fixo".
   const box=document.getElementById('mrec-extras-box');if(box)box.style.display='block';
 }
 function calcRecLiq(){
@@ -1470,9 +1414,6 @@ function excluirVd(id){if(!confirm('Excluir?'))return;const vinculadas=ERP.receb
 // CONTAS A PAGAR
 let _rateiosPag=[];
 function ratearGuiaPelaFolha(){
-  // Divide a GUIA (FGTS/INSS) entre os contratos na proporção da remuneração
-  // de cada colaborador — usa a FOLHA REAL do mês de competência (se fechada),
-  // senão a estimativa do cadastro. Respeita o rateio de cada colaborador.
   const comp=document.getElementById('mpag-comp').value||document.getElementById('mpag-venc').value?.slice(0,7)||getMes();
   const pesos={};let total=0;
   const folha=(ERP.folhas||[]).find(f=>f.comp===comp&&f.fechada);
@@ -1500,8 +1441,6 @@ function ratearGuiaPelaFolha(){
   alert('⚖️ Guia rateada pela '+(folha?'FOLHA REAL':'estimativa do cadastro')+' de '+comp+'. Confira os percentuais e salve.');
 }
 function ratearPagarPorEquipe(){
-  // Divide a despesa entre os contratos na proporção do VT/VR/benefícios
-  // médios (cadastro) de cada colaborador ativo, respeitando o rateio de cada um
   const pesos={};let total=0;
   ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
     const ref=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
@@ -1545,8 +1484,6 @@ function abrirModalPagar(id){
   if(id){
     const p=ERP.pagar.find(x=>x.id===id);
     document.getElementById('mpag-id').value=p.id;document.getElementById('mpag-desc').value=p.desc||'';document.getElementById('mpag-cat').value=p.catId||'';document.getElementById('mpag-val').value=p.val||'';document.getElementById('mpag-venc').value=p.venc||'';document.getElementById('mpag-comp').value=p.comp||'';document.getElementById('mpag-capital').checked=!!p.capital;document.getElementById('mpag-rec').value=p.recorr||'unica';document.getElementById('mpag-st').value=p.st||'pendente';document.getElementById('mpag-dpag').value=p.dpag||'';document.getElementById('mpag-obs').value=p.obs||'';
-    // Compatibilidade: lançamentos antigos só tinham um ccId único — vira
-    // automaticamente um rateio de 100% pra esse mesmo cliente.
     if(p.rateios&&p.rateios.length)_rateiosPag=p.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
     else if(p.ccId)_rateiosPag=[{ccId:p.ccId,pct:100}];
     else _rateiosPag=[];
@@ -1744,10 +1681,6 @@ function salvarCliente(){
   if(id){const i=ERP.clientes.findIndex(x=>x.id===id);ERP.clientes[i]=obj;}else ERP.clientes.push(obj);
   if(!id&&tipo==='fixo'&&valor>0&&inicio){
     const meses=dur==='0'?1:Number(dur||1);
-    // Corrige bug de fuso: 'new Date("2026-07-01")' é interpretado como UTC e,
-    // no fuso do Brasil (UTC-3), vira 30/06/2026 local — empurrando a
-    // competência inteira um mês pra trás. Construir com ano/mês/dia
-    // numéricos evita esse problema (fica sempre em horário local).
     const [iniY,iniM,iniD]=inicio.split('-').map(Number);
     for(let m=0;m<meses;m++){
       const d=new Date(iniY,iniM-1+m,iniD);
@@ -1765,10 +1698,6 @@ function renderClientes(){
     return`<tr><td><strong>${c.nome}</strong>${c.cnpj?`<div style="font-size:11px;color:var(--text3)">${c.cnpj}</div>`:''}</td><td><span class="badge ${c.tipo==='fixo'?'b-blue':c.tipo==='cobertura'?'b-orange':'b-gray'}">${c.tipo==='fixo'?'Fixo':c.tipo==='cobertura'?'Cobertura':'Avulso'}</span></td><td>${c.svNome||'—'}</td><td><strong style="color:var(--green)">${fmt(c.valor)}</strong> / Dia ${c.diaVenc}</td><td style="font-size:11px;">${periodo}</td><td>${c.ret==='nao'?'<span class="badge b-gray">Não</span>':`<span class="badge b-yellow">${c.ret.toUpperCase()} ${c.retP}%</span>`}</td><td><span class="badge ${c.ativo!==false?'b-green':'b-gray'}">${c.ativo!==false?'Ativo':'Inativo'}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalCliente('${c.id}')">✏️</button><button class="btn btn-ghost btn-sm" onclick="gerarParcelasCliente('${c.id}')" title="Gerar/completar parcelas mensais deste contrato (não duplica meses existentes)">🔄</button><button class="btn btn-primary btn-sm" onclick="abrirModalReceber();setTimeout(()=>{document.getElementById('mrec-cli').value='${c.id}';preencherCli();},100)">💰</button><button class="btn btn-danger btn-sm" onclick="excluirCli('${c.id}')">🗑️</button></td></tr>`;
   }).join('');
 }
-// Gera (ou completa) as parcelas mensais de um cliente que JÁ EXISTE, sem
-// duplicar clientes. Útil para: parcelas perdidas num incidente de sync,
-// renovação de contrato, ou contratos que nunca tiveram parcelas geradas.
-// Pula automaticamente qualquer mês que já tenha lançamento pra esse cliente.
 function gerarParcelasCliente(id){
   const c=ERP.clientes.find(x=>x.id===id);if(!c)return;
   if(c.tipo!=='fixo'||!(c.valor>0)||!c.inicio){alert('Isso só funciona para clientes do tipo "Fixo Mensal" com valor e início de contrato preenchidos. Lance manualmente em Contas a Receber pra esse cliente.');return;}
@@ -1808,12 +1737,6 @@ function excluirCli(id){
   const impIds=ERP.impostos.filter(i=>i.ccId===id).map(i=>i.id);
   const vdIds=ERP.vendas.filter(v=>v.cliId===id).map(v=>v.id);
   ERP.clientes=ERP.clientes.filter(x=>x.id!==id);
-  // Antes, excluir um cliente deixava as parcelas geradas para ele "órfãs"
-  // na Contas a Receber pra sempre (mesmo nome, mesmos valores, sem dono) —
-  // é a causa mais provável dos lançamentos duplicados/fantasma que
-  // apareciam mesmo depois de corrigir o cliente. Agora remove tudo junto,
-  // e marca cada um como excluído de propósito (tombstone) pra não
-  // reaparecer numa próxima mesclagem com o Sheets.
   ERP.receber=ERP.receber.filter(r=>r.cliId!==id);
   ERP.pagar=ERP.pagar.filter(p=>p.ccId!==id);
   ERP.impostos=ERP.impostos.filter(i=>i.ccId!==id);
@@ -1826,12 +1749,6 @@ function excluirCli(id){
   salvarERP();renderClientes();renderReceber();renderPagar();renderImpostos();renderVendas();renderDash();
 }
 
-// ================================================================
-// LIMPEZA DE DADOS — duplicados exatos e lançamentos órfãos
-// ================================================================
-// Ferramenta pra higienizar dados que já ficaram bagunçados por causa dos
-// bugs antigos (cliente excluído sem apagar as parcelas, cadastro em
-// duplicidade, etc). Uso manual, sempre pede confirmação antes de apagar.
 function detectarDuplicadosReceber(){
   const vistos=new Map();const duplicados=[];
   ERP.receber.forEach(r=>{
@@ -1849,10 +1766,6 @@ async function limparDadosReceber(){
   if(!navigator.onLine){alert('Sem conexão com a internet. Conecte-se antes de usar esta ferramenta — ela precisa confirmar os dados mais recentes do Sheets antes de apagar qualquer coisa.');return;}
   const btn=document.getElementById('btn-limpar-rec');
   if(btn){btn.textContent='⏳ Confirmando dados com o Sheets...';btn.disabled=true;}
-  // SEMPRE busca a versão mais recente do Sheets antes de decidir o que é
-  // duplicado ou órfão. Foi exatamente a falta disso que causou perda de
-  // dados antes: uma aba desatualizada achou que clientes reais eram
-  // "órfãos" só porque não estavam na memória DAQUELA aba.
   const ok=await carregarDoSheets();
   if(btn){btn.textContent='🧹 Limpar Duplicados/Órfãos';btn.disabled=false;}
   if(!ok){
@@ -1871,7 +1784,6 @@ async function limparDadosReceber(){
   salvarERP();renderReceber();renderDash();
   alert(`✅ ${idsRemover.size} lançamento(s) removido(s).`);
 }
-// ================================================================
 
 // COLABORADORES
 let _rateiosCol=[];
@@ -1909,8 +1821,6 @@ function abrirModalColab(id){
   if(id){
     const c=ERP.colaboradores.find(x=>x.id===id);
     document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-he').value=c.he||'';document.getElementById('mco-adnot').value=c.adnot||'';document.getElementById('mco-insal').value=c.insal||'';document.getElementById('mco-peric').value=c.peric||'';document.getElementById('mco-outros').value=c.outros||'';document.getElementById('mco-vt').value=c.vt||'';document.getElementById('mco-vr').value=c.vr||'';document.getElementById('mco-benef').value=c.benef||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';
-    // Compatibilidade: colaboradores antigos só tinham um ccId único — isso
-    // vira automaticamente um rateio de 100% pra esse mesmo cliente.
     if(c.rateios&&c.rateios.length)_rateiosCol=c.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
     else if(c.ccId)_rateiosCol=[{ccId:c.ccId,pct:100}];
     else _rateiosCol=[];
@@ -1931,8 +1841,6 @@ function salvarColab(){
   const id=document.getElementById('mco-id').value;const a=_lerAdicCol();const sal=a.sal;const rem=a.sal+a.he+a.adnot+a.insal+a.peric+a.outros;const tipo=document.getElementById('mco-tipo').value;
   const pf=tipo==='CLT'?rem*1.333/12:0,pd=tipo==='CLT'?rem/12:0,pr=tipo==='CLT'?rem*0.5/12:0,pj=tipo==='CLT'?rem*Number(ERP.config.jurPerc||5)/100:0;
   const rateios=_rateiosCol.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
-  // ccId principal = maior fatia do rateio (mantém compatibilidade com a
-  // Folha, que continua gerando um único lançamento por colaborador).
   const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
   const obj={up:Date.now(),id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,he:a.he,adnot:a.adnot,insal:a.insal,peric:a.peric,outros:a.outros,rem,vt:a.vt,vr:a.vr,benef:a.benef,fgts:tipo==='CLT'?rem*0.08:0,inss:0,custoTotal:(tipo==='CLT'?rem*1.08:rem)+a.vt+a.vr+a.benef,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:principal?principal.ccId:'',rateios,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true,up:Date.now()};
   if(id){const i=ERP.colaboradores.findIndex(x=>x.id===id);ERP.colaboradores[i]=obj;}else ERP.colaboradores.push(obj);
@@ -1996,28 +1904,24 @@ function abrirModalRecibo(tipo){
   abrirModal('modal-recibo');
 }
 
-
-
-
 // ===== FOLHA DO MÊS — APONTAMENTOS REAIS =====
 let _fmItens=[];
 function _fmCalcItem(it){
   const proventos=Number(it.base||0)+Number(it.he||0)+Number(it.not||0)+Number(it.insal||0)+Number(it.peric||0)+Number(it.dsr||0)+Number(it.outros||0);
-  const benef=0; // v14: VT/VR entram pelo lançamento da COMPRA (rateio pela equipe), não pela folha
+  const benef=0;
   const clt=it.tipo==='CLT';
   const rpa=it.tipo==='RPA';
   // Todo RPA tem 11% de INSS descontado por lei sobre os proventos do mês
   // (não incide sobre VT/VA, que são pagos à parte / integrais)
   const inssRpa=rpa?Math.round(proventos*0.11*100)/100:0;
   const liquidoAuto=proventos-Number(it.descs||0)-inssRpa;
-  const remProv=proventos; // provisões e FGTS sobre a remuneração bruta do mês
+  const remProv=proventos;
   const fgts=clt?remProv*0.08:0;
   const pFer=clt?remProv*1.333/12:0;
   const pDec=clt?remProv/12:0;
   const pResc=clt?remProv*0.5/12:0;
   const pJur=clt?remProv*Number(ERP.config.jurPerc||5)/100:0;
   return {proventos,benef,inssRpa,liquidoAuto,fgts,pFer,pDec,pResc,pJur,provTot:pFer+pDec+pResc+pJur,custoTotal:proventos+benef+fgts+pFer+pDec+pResc+pJur};
-}
 }
 function _fmAtualizarLinha(i){
   const c=_fmCalcItem(_fmItens[i]);
@@ -2028,6 +1932,8 @@ function _fmAtualizarLinha(i){
   set('fm-fgts-'+i,fmt(c.fgts));
   set('fm-provt-'+i,fmt(c.provTot));
   set('fm-cust-'+i,fmt(c.custoTotal));
+  const inssEl=document.getElementById('fm-inss-'+i);
+  if(inssEl)inssEl.textContent=_fmItens[i].tipo==='RPA'?fmt(c.inssRpa):'—';
   _fmTotais();
 }
 function _fmTotais(){
@@ -2047,7 +1953,7 @@ function _fmTotais(){
       <div style="background:var(--purple);border-radius:8px;padding:10px;color:#fff;"><div style="font-size:11px;opacity:.85;">TOTAL PROVISÃO</div><div style="font-weight:800;font-size:16px;">${fmt(t.provT)}</div></div>
     </div>
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:12px;font-weight:700;">
-<span>Proventos: ${fmt(t.prov)}</span><span style="color:var(--orange);">INSS RPA (11%): ${fmt(t.inss)}</span><span>Líquido: ${fmt(t.liq)}</span><span>FGTS: ${fmt(t.fgts)}</span><span style="color:var(--red);">CUSTO TOTAL DO MÊS: ${fmt(t.cust)}</span>
+      <span>Proventos: ${fmt(t.prov)}</span><span style="color:var(--orange);">INSS RPA (11%): ${fmt(t.inss)}</span><span>Líquido: ${fmt(t.liq)}</span><span>FGTS: ${fmt(t.fgts)}</span><span style="color:var(--red);">CUSTO TOTAL DO MÊS: ${fmt(t.cust)}</span>
     </div>
   </div>`;
 }
@@ -2069,7 +1975,7 @@ function renderFolhaMes(){
   }
   const dis=fechada?'disabled':'';
   const inp=(i,campo,val)=>`<input type="number" step="0.01" value="${val||0}" ${dis} style="width:86px;padding:5px 6px;font-size:12px;" oninput="_fmItens[${i}].${campo}=Number(this.value)||0;_fmAtualizarLinha(${i})">`;
- document.getElementById('fm-tabela').innerHTML=_fmItens.length?`<div class="card" style="padding:0;"><div class="table-wrap"><table>
+  document.getElementById('fm-tabela').innerHTML=_fmItens.length?`<div class="card" style="padding:0;"><div class="table-wrap"><table>
     <thead><tr><th>Colaborador</th><th>Base (R$)</th><th>H. Extra</th><th>Ad. Not.</th><th>Insalub.</th><th>Peric.</th><th>DSR/Refl.</th><th>Outros</th><th>Descontos</th><th>Proventos</th><th>INSS 11% (RPA)</th><th>Líquido a pagar</th><th>FGTS 8%</th><th>Provisões</th><th>Custo total</th><th></th></tr></thead>
     <tbody>${_fmItens.map((it,i)=>{const c=_fmCalcItem(it);
       return`<tr>
@@ -2088,6 +1994,12 @@ function renderFolhaMes(){
     <div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 "Líquido a pagar" já vem com o INSS de 11% descontado automaticamente para RPA (VT/VA não entram aqui — são pagos à parte, integrais). Você pode digitar o líquido exato do contracheque se for diferente. A guia GPS/INSS retido lança em 🏛️ Impostos. Use o 🗑️ pra remover quem apareceu no mês por engano — o cadastro dele não é afetado.</div>`
     :'<div class="card" style="text-align:center;padding:24px;color:var(--text3);">Cadastre colaboradores ativos primeiro.</div>';
   _fmTotais();
+}
+function _fmRemoverLinha(i){
+  if(!confirm('Remover '+_fmItens[i].nome+' da folha deste mês?\n\nO cadastro dele não é afetado — ele continua aparecendo normalmente nos próximos meses.'))return;
+  _fmItens.splice(i,1);
+  salvarFolhaMes(true);
+  renderFolhaMes();
 }
 function salvarFolhaMes(silencioso){
   const mes=getMes();
@@ -2114,15 +2026,6 @@ function fecharFolhaMes(){
     const liq=(it._liqManual&&it.liquido!=null)?Number(it.liquido):c.liquidoAuto;
     const rat=(it.rateios&&it.rateios.length)?it.rateios:undefined;
     if(liq>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,desc:`Salário — ${it.nome} (${it.tipo}) · folha real`,catNome:it.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:Math.round(liq*100)/100,venc:mes+'-05',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:mes});
-    // v15: FGTS/INSS entram pela GUIA lançada em Contas a Pagar
-    // (botão "🏛️ Ratear guia pela folha" divide entre os contratos)
-    // v14: VT/VR não são gerados pela folha — o custo entra pela compra rateada
-    function _fmRemoverLinha(i){
-  if(!confirm('Remover '+_fmItens[i].nome+' da folha deste mês?\n\nO cadastro dele não é afetado — ele continua aparecendo normalmente nos próximos meses.'))return;
-  _fmItens.splice(i,1);
-  salvarFolhaMes(true);
-  renderFolhaMes();
-}
   });
   salvarERP();renderFolhaMes();
   alert('✅ Folha fechada! Salários gerados em Contas a Pagar.\n\n📌 Quando as GUIAS chegarem (FGTS/INSS), lance cada uma em Contas a Pagar e use o botão 🏛️ Ratear guia pela folha.\n💜 E transfira o TOTAL PROVISÃO para a conta virtual Provisão RH.');
@@ -2264,7 +2167,6 @@ function relEvolucao(){
     const res=fat-fat*Number(ERP.config.aliq||4.5)/100-desp;
     linhas+=`<tr><td>${MESES[d.getMonth()]} ${d.getFullYear()}</td><td class="dir">${fmt(fat)}</td><td class="dir">${fmt(rec)}</td><td class="dir neg">(${fmt(desp)})</td><td class="dir ${res>=0?'pos':'neg'}"><strong>${fmt(res)}</strong></td></tr>`;
   }
-  // Ranking por cliente (últimos 12 meses)
   const desde=new Date(hoje.getFullYear(),hoje.getMonth()-11,1).toISOString().slice(0,7);
   const rank={};
   ERP.receber.filter(r=>(r.comp||r.venc||'').slice(0,7)>=desde).forEach(r=>{const n=ERP.clientes.find(c=>c.id===r.cliId)?.nome||r.cliNome||'—';rank[n]=(rank[n]||0)+Number(r.val||0);});
@@ -2309,7 +2211,6 @@ function renderRelatorios(){
     card('📊','Evolução 12 Meses','Faturado × recebido × despesas mês a mês + participação de cada cliente na receita.','relEvolucao')+
     card('👥','Folha & Provisões','Remuneração, FGTS, provisões e custo total de cada colaborador ativo.','relFolhaProv');
 }
-
 
 // ===== LICITAÇÕES: CERTIDÕES + FORMAÇÃO DE PREÇOS (IN 05/2017) =====
 function _statusCert(c){
@@ -2624,7 +2525,6 @@ function renderAlmox(){
   const alertas=ERP.produtos.filter(p=>(p.min||0)>0&&(p.saldo||0)<=(p.min||0)).length;
   const consumoMes=ERP.estoqueMov.filter(m=>m.tipo==='saida'&&(m.data||'').slice(0,7)===mes).reduce((s,m)=>s+Number(m.custoTotal||0),0);
   document.getElementById('almox-kpis').innerHTML=kpi('Produtos',ERP.produtos.length)+kpi('Valor em estoque',fmt(valorEstoque),'var(--brand)')+kpi('Repor ⚠️',alertas,alertas?'var(--red)':'var(--green)')+kpi('Consumo no mês',fmt(consumoMes),'var(--orange)');
-  // Estoque
   document.getElementById('almox-estoque').innerHTML=ERP.produtos.length?'<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Produto</th><th>Categoria</th><th>Saldo</th><th>Mínimo</th><th>Custo médio</th><th>Valor em estoque</th><th>Ações</th></tr></thead><tbody>'+
     [...ERP.produtos].sort((a,b)=>a.nome.localeCompare(b.nome)).map(p=>{
       const alerta=(p.min||0)>0&&(p.saldo||0)<=(p.min||0);
@@ -2632,11 +2532,9 @@ function renderAlmox(){
       <td><strong style="color:${alerta?'var(--red)':(p.saldo<0?'var(--red)':'var(--text)')}">${p.saldo||0} ${p.uniCons}(s)</strong>${alerta?' <span class="badge b-red">repor</span>':''}</td>
       <td>${p.min||'—'}</td><td>${fmt(p.custoMedio||0)}/${p.uniCons}</td><td>${fmt(Math.max(p.saldo||0,0)*(p.custoMedio||0))}</td>
       <td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalProduto('${p.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirProduto('${p.id}')">🗑️</button></td></tr>`;}).join('')+'</tbody></table></div></div>':'<div class="card" style="text-align:center;padding:24px;color:var(--text3);">Cadastre os produtos que você compra (materiais, EPIs, uniformes) em <strong>+ Novo</strong>.</div>';
-  // Filtro de destino
   const fsel=document.getElementById('almox-fcli');const fval=fsel.value;
   fsel.innerHTML='<option value="">Todos os destinos</option><option value="__adm">⚙️ ADM</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
   fsel.value=fval;
-  // Movimentações do mês
   let movs=ERP.estoqueMov.filter(m=>(m.data||'').slice(0,7)===mes);
   if(fval==='__adm')movs=movs.filter(m=>m.tipo==='saida'&&!m.ccId);
   else if(fval)movs=movs.filter(m=>m.ccId===fval);
@@ -2661,19 +2559,18 @@ const PROP_PADRAO={
   pag:`Os pagamentos deverão ser efetuados até o 3º dia útil do mês subsequente, mediante apresentação de nota fiscal. Em caso de atraso, incidirão multa, juros de mora e correção monetária conforme condições contratuais.`
 };
 let _postosProp=[];
-// Percentuais de encargos (modelo da planilha de precificação da Marjorie)
 const ENC_PADRAO={fgts:8,ferias:11.0789,dec:8.33,multaFgts:3.2,jur:5,inss:0};
 function calcCustoPosto(p){
   const c=p.custo||{};
   const sal=Number(c.sal||0);
   const adics=Number(c.he||0)+Number(c.adnot||0)+Number(c.insal||0)+Number(c.peric||0);
-  const base=sal+adics; // encargos incidem sobre salário + adicionais habituais
+  const base=sal+adics;
   const regime=c.regime||'clt';
   let enc=0,detEnc=[];
   if(regime==='rpa'){
     const pInss=c.inssRpa!=null?Number(c.inssRpa):20;
     enc=base*pInss/100;detEnc.push(['INSS patronal RPA '+pInss+'%',enc]);
-  }else{ // clt, parcial e cobertura usam os mesmos percentuais mensais
+  }else{
     const pInss=c.inss!=null?Number(c.inss):ENC_PADRAO.inss;
     const linhas=[['INSS/RAT '+pInss+'%',base*pInss/100],['FGTS 8%',base*ENC_PADRAO.fgts/100],['Férias+1/3 11,08%',base*ENC_PADRAO.ferias/100],['13º 8,33%',base*ENC_PADRAO.dec/100],['Multa FGTS 3,2%',base*ENC_PADRAO.multaFgts/100],['Jurídico '+(Number(ERP.config.jurPerc||5))+'%',base*Number(ERP.config.jurPerc||5)/100]];
     linhas.forEach(l=>{if(l[1]>0)detEnc.push(l);enc+=l[1];});
@@ -2683,7 +2580,6 @@ function calcCustoPosto(p){
   return {base,adics,enc,detEnc,benef,custoTotal};
 }
 function precoSugerido(custo,mkp){
-  // margem desejada sobre o PREÇO, já descontando o DAS por dentro
   const das=Number(ERP.config.aliq||4.5);
   const m=Number(mkp||0);
   const div=1-(das+m)/100;
@@ -2845,7 +2741,6 @@ function imprimirProposta(p){
   const matTxt=p.mat==='mjl'?'Os materiais de limpeza serão fornecidos pela MJL (já inclusos no valor), assim como os EPIs e uniformes dos colaboradores.':'Os materiais e equipamentos de limpeza serão fornecidos pelo Condomínio/Cliente. A MJL fornece os uniformes e EPIs de uso pessoal dos seus colaboradores.';
   const B=p.blocos||{};
   const AZUL='#1f7fd1', AZULC='#9fcdf0', CINZA='#f0f2f5';
-  // SVG decorativo de mãos unidas (autossuficiente, não depende de imagem externa)
   const maosSVG=`<svg viewBox="0 0 300 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
     <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b6cb0"/><stop offset="1" stop-color="#63a4d8"/></linearGradient></defs>
     <rect width="300" height="380" fill="url(#g1)"/>
@@ -2879,11 +2774,9 @@ function imprimirProposta(p){
     .rodape{position:absolute;bottom:9mm;left:16mm;right:16mm;font-size:9px;color:#9aa5b1;border-top:1px solid #e2e8f0;padding-top:5px;text-align:center;}
     .ass{margin-top:30mm;display:flex;gap:16mm;}
     .ass div{flex:1;border-top:1.4px solid #4a5568;padding-top:6px;text-align:center;font-size:11px;color:#4a5568;}
-    .ico{width:52px;height:52px;border-radius:50%;border:2px solid ${AZULC};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
   </style></head><body>
 
-  <!-- CAPA -->
   <div class="pg">
     <div style="position:absolute;top:0;right:0;width:40%;height:100%;background:${CINZA};"></div>
     <svg style="position:absolute;top:0;right:0;width:42%;height:100%;opacity:0.5;" viewBox="0 0 200 400" preserveAspectRatio="none"><g fill="none" stroke="#d4dae1" stroke-width="1">${[0,1,2,3,4,5,6,7].map(i=>`<path d="M${200-i*22} 0 Q ${120-i*18} 200 ${200-i*10} 400"/>`).join('')}</g></svg>
@@ -2895,8 +2788,7 @@ function imprimirProposta(p){
       ${p.end?`<div style="font-size:11px;color:#888;">${p.end}</div>`:''}
       <div style="margin-top:16px;font-size:15px;font-weight:600;">MJL Serviços e Soluções</div>
       <div style="margin-top:8px;font-size:12px;color:#444;display:flex;align-items:center;gap:8px;"><span style="color:${AZUL};font-size:15px;">📞</span> (21) 9 6838-1313</div>
-      <div style="margin-top:4px;font-size:12px;color:#444;display:flex;align-items:center;gap:8px;"><span style="color:${AZUL};font-size:15px;">✉️</span> contato@mjlservicosesolucoes.com.br</div>
-      <div style="margin-top:8px;font-size:12px;font-weight:800;">www.mjlservicosesolucoes.com.br</div>
+      <div style="margin-top:4px;font-size:12px;color:#444;display:flex;align-items:center;gap:8px;"><span style="color:${AZUL};font-size:15px;">✉️</span> mjlservicosesolucoes@gmail.com</div>
       <div style="border-top:3px solid ${AZULC};width:60px;margin:16px 0;"></div>
       <div style="font-size:11px;color:#888;">Nº da Proposta:</div><div style="font-size:14px;font-weight:800;">${p.num}</div>
       <div style="font-size:11px;color:#888;margin-top:8px;">Data de Emissão:</div><div style="font-size:14px;font-weight:800;">${fmtD(p.data)}</div>
@@ -2904,18 +2796,16 @@ function imprimirProposta(p){
     </div>
   </div>
 
-  ${B.sobre!==false?`<!-- SOBRE -->
-  <div class="pg">
+  ${B.sobre!==false?`<div class="pg">
     <div style="position:absolute;left:0;top:0;width:38%;height:100%;">${maosSVG}</div>
     <div style="margin-left:40%;" class="pad">
       <div style="text-align:right;"><h2>Sobre a</h2><div class="h2b">Empresa</div><div class="risco">/////</div></div>
       <h3>Quem Somos</h3>${paras(p.tSobre)}
       <h3 style="margin-top:22px;">Porque Escolher a MJL</h3><ul>${bullets(p.tPorque)}</ul>
     </div>
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — mjlservicosesolucoes@gmail.com</div>
   </div>`:''}
 
-  <!-- PROJETO + ORÇAMENTO -->
   <div class="pg"><div class="pad">
     ${B.resp!==false?`<div style="text-align:right;"><h2>Descrição do Projeto</h2><div class="h2b" style="font-size:28px;">Especificações</div><div class="risco">/////</div></div>
     <h3>Projeto — ${p.cli}</h3>
@@ -2935,10 +2825,9 @@ function imprimirProposta(p){
     </div>
     <p style="font-size:11px;color:#888;margin-top:4px;">Já inclusos todos os impostos, encargos, benefícios, uniformes e material de limpeza.</p>
     ${B.comp?`<h3>Composição de Custos</h3>${paras(p.tComp)}`:''}
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — mjlservicosesolucoes@gmail.com</div>
   </div></div>
 
-  <!-- CONDIÇÕES + CONCLUSÃO -->
   <div class="pg"><div class="pad">
     ${B.resumo!==false?`<h2>Resumo das</h2><div class="h2b" style="font-size:26px;">Condições Contratuais</div><div class="risco">/////</div>
     <ul style="margin-top:8px;">${bullets(p.tResumo)}</ul>`:''}
@@ -2948,7 +2837,7 @@ function imprimirProposta(p){
     <p>Estamos à disposição para quaisquer esclarecimentos e para formalizar esta parceria.</p>
     <p style="margin-top:16px;">Rio de Janeiro, ${fmtD(p.data)}</p>
     <div class="ass"><div>MJL Serviços e Soluções</div><div>${p.cli}</div></div>
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — mjlservicosesolucoes@gmail.com</div>
   </div></div>
   <script>window.onload=function(){window.print();};</scr`+`ipt></body></html>`;
   const w=window.open('','_blank');w.document.write(html);w.document.close();
@@ -2961,8 +2850,15 @@ function preencherRecRpaDaFolha(){
   const it=folha&&folha.itens.find(x=>x.colabId===rpaId);
   if(it){
     document.getElementById('mrb-rpa-base').value=it.base||0;
-    document.getElementById('mrb-rpa-adic').value=(Number(it.he||0)+Number(it.not||0)+Number(it.peric||0)+Number(it.outros||0))||0;
+    document.getElementById('mrb-rpa-adic').value=(Number(it.he||0)+Number(it.not||0)+Number(it.peric||0)+Number(it.dsr||0)+Number(it.outros||0))||0;
     document.getElementById('mrb-rpa-insal').value=it.insal||0;
+  }else{
+    const cad=ERP.colaboradores.find(c=>c.id===rpaId);
+    if(cad){
+      document.getElementById('mrb-rpa-base').value=cad.sal||0;
+      document.getElementById('mrb-rpa-adic').value=(Number(cad.he||0)+Number(cad.adnot||0)+Number(cad.peric||0)+Number(cad.outros||0))||0;
+      document.getElementById('mrb-rpa-insal').value=cad.insal||0;
+    }
   }
   calcRecRpa();
 }
@@ -2970,7 +2866,7 @@ function calcRecRpa(){
   const base=Number(document.getElementById('mrb-rpa-base')?.value||0);
   const adic=Number(document.getElementById('mrb-rpa-adic')?.value||0);
   const insal=Number(document.getElementById('mrb-rpa-insal')?.value||0);
-  const bruto=base+adic+insal;const inss=Math.round(bruto*0.11*100)/100;const liq=bruto-inss;
+  const bruto=base+adic+insal;const inss=Math.round(bruto*0.11*100)/100;const liq=Math.round((bruto-inss)*100)/100;
   const e=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
   e('mrb-rpa-bruto',fmt(bruto));e('mrb-rpa-inss',fmt(inss));e('mrb-rpa-val',fmt(liq));
 }
@@ -2985,155 +2881,195 @@ function gerarRecibo(){
     const bruto=base+adic+insal;const inss=Math.round(bruto*0.11*100)/100;const liq=Math.round((bruto-inss)*100)/100;
     r={up:Date.now(),id:gid(),tipo:'rpa',num:document.getElementById('mrb-rpa-num').value,rpaId,rpaNome:rpa?.nome||'',rpaCPF:rpa?.cpf||'',rpaPix:rpa?.pix||'',base,adic,insal,bruto,inss,val:liq,desc:document.getElementById('mrb-rpa-desc').value,comp:document.getElementById('mrb-rpa-comp').value,data:new Date().toISOString().slice(0,10)};
   }
-  ERP.recibos.push(r);salvarERP();fm('modal-recibo');imprimirRecibo(r);
+  ERP.recibos.push(r);salvarERP();fm('modal-recibo');imprimirRecibo(r);renderRecibos();
 }
-}
+
 function imprimirRecibo(r){
   const cfg=ERP.config;const[ano,m]=r.comp.split('-');const compStr=MESES[Number(m)-1]+'/'+ano;const dataStr=new Date(r.data+'T12:00').toLocaleDateString('pt-BR');let html='';
-  if(r.tipo==='cliente'){html=`<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto;padding:24px;border:2px solid #1a4f7a;border-radius:12px;"><div style="display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:2px solid #1a4f7a;margin-bottom:16px;"><div style="font-size:40px;">🌀</div><div><div style="font-size:18px;font-weight:700;color:#1a4f7a;">${cfg.nome}</div><div style="font-size:10px;color:#5a6a7a;">QUALIDADE E EXCELÊNCIA | CNPJ: ${cfg.cnpj} | ${cfg.tel}</div></div><div style="margin-left:auto;text-align:right;"><div style="font-size:13px;font-weight:700;color:#1a4f7a;">Nº ${r.num}</div><div style="font-size:11px;color:#8a9aaa;">${dataStr}</div></div></div><div style="text-align:center;font-size:18px;font-weight:700;color:#1a4f7a;background:#e8f0f8;padding:10px;border-radius:8px;margin-bottom:16px;">RECIBO DE PRESTAÇÃO DE SERVIÇOS</div><div style="text-align:center;padding:16px;background:#eaf5ee;border-radius:8px;margin-bottom:14px;border:2px solid #9ad1b0;"><div style="font-size:32px;font-weight:700;color:#1e7e4a;">R$ ${Number(r.val).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div style="font-size:12px;color:#5a6a7a;">Referente a: ${compStr}</div></div><table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;"><div<tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;width:35%;">Recebemos de:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${r.cliNome}</strong>${r.cliCNPJ?' — CNPJ: '+r.cliCNPJ:''}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Referente a:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.desc}</td></tr><tr><td style="padding:6px 8px;font-weight:700;color:#5a6a7a;">Competência:</td><td style="padding:6px 8px;">${compStr}</td></tr></table> style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;"><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Prestador<br><strong>${cfg.nome}</strong><br>CNPJ: ${cfg.cnpj}</div><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Tomador<br><strong>${r.cliNome}</strong></div></div><div style="text-align:center;font-size:10px;color:#8a9aaa;margin-top:14px;border-top:1px solid #dde2ea;padding-top:10px;">${cfg.nome} | CNPJ: ${cfg.cnpj} | Recibo nº ${r.num} | ${dataStr}</div></div>`;}
-  else{html=`<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto;padding:24px;border:2px solid #e67e22;border-radius:12px;"><div style="display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:2px solid #e67e22;margin-bottom:16px;"><div style="font-size:40px;">🌀</div><div><div style="font-size:18px;font-weight:700;color:#1a4f7a;">${cfg.nome}</div><div style="font-size:10px;color:#5a6a7a;">CNPJ: ${cfg.cnpj} | ${cfg.tel}</div></div><div style="margin-left:auto;text-align:right;"><div style="font-size:12px;font-weight:700;color:#e67e22;">RPA Nº ${r.num}</div><div style="font-size:11px;color:#8a9aaa;">${dataStr}</div></div></div><div style="text-align:center;font-size:18px;font-weight:700;color:#e67e22;background:#fef0e6;padding:10px;border-radius:8px;margin-bottom:16px;">RECIBO DE PAGAMENTO AUTÔNOMO (RPA)</div><div style="text-align:center;padding:16px;background:#fef0e6;border-radius:8px;margin-bottom:14px;border:2px solid #f5c06a;"><div style="font-size:32px;font-weight:700;color:#e67e22;">R$ ${Number(r.val).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div style="font-size:12px;color:#5a6a7a;">Competência: ${compStr}</div></div><table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;"><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;width:35%;">Prestador:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${r.rpaNome}</strong></td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">CPF:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.rpaCPF||'—'}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">PIX:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.rpaPix||'—'}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Tomador:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${cfg.nome}</strong> — CNPJ: ${cfg.cnpj}</td></tr><tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Serviço:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.desc}</td></tr><tr><td style="padding:6px 8px;font-weight:700;color:#5a6a7a;">Competência:</td><td style="padding:6px 8px;">${compStr}</td></tr></table><p style="font-size:10px;color:#5a6a7a;background:#fef9e7;padding:8px;border-radius:6px;margin-bottom:14px;">Declaro ter recebido a importância acima pelos serviços prestados como profissional autônomo, ciente das minhas responsabilidades tributárias.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;"><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Prestador<br><strong>${r.rpaNome}</strong><br>CPF: ${r.rpaCPF||'—'}</div><div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Responsável<br><strong>${cfg.nome}</strong></div></div></div>`;}
-  document.getElementById('print-area').innerHTML=html;window.print();setTimeout(()=>document.getElementById('print-area').innerHTML='',1500);
+  const money=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  if(r.tipo==='cliente'){
+    html=`<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto;padding:24px;border:2px solid #1a4f7a;border-radius:12px;">
+      <div style="display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:2px solid #1a4f7a;margin-bottom:16px;">
+        <div style="font-size:40px;">🌀</div>
+        <div><div style="font-size:18px;font-weight:700;color:#1a4f7a;">${cfg.nome}</div><div style="font-size:10px;color:#5a6a7a;">QUALIDADE E EXCELÊNCIA | CNPJ: ${cfg.cnpj} | ${cfg.tel}</div></div>
+        <div style="margin-left:auto;text-align:right;"><div style="font-size:13px;font-weight:700;color:#1a4f7a;">Nº ${r.num}</div><div style="font-size:11px;color:#8a9aaa;">${dataStr}</div></div>
+      </div>
+      <div style="text-align:center;font-size:18px;font-weight:700;color:#1a4f7a;background:#e8f0f8;padding:10px;border-radius:8px;margin-bottom:16px;">RECIBO DE PRESTAÇÃO DE SERVIÇOS</div>
+      <div style="text-align:center;padding:16px;background:#eaf5ee;border-radius:8px;margin-bottom:14px;border:2px solid #9ad1b0;">
+        <div style="font-size:32px;font-weight:700;color:#1e7e4a;">${money(r.val)}</div>
+        <div style="font-size:12px;color:#5a6a7a;">Referente a: ${compStr}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;">
+        <tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;width:35%;">Recebemos de:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${r.cliNome}</strong>${r.cliCNPJ?' — CNPJ: '+r.cliCNPJ:''}</td></tr>
+        <tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Referente a:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.desc||''}</td></tr>
+        <tr><td style="padding:6px 8px;font-weight:700;color:#5a6a7a;">Competência:</td><td style="padding:6px 8px;">${compStr}</td></tr>
+      </table>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;">
+        <div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Prestador<br><strong>${cfg.nome}</strong><br>CNPJ: ${cfg.cnpj}</div>
+        <div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Tomador<br><strong>${r.cliNome}</strong></div>
+      </div>
+      <div style="text-align:center;font-size:10px;color:#8a9aaa;margin-top:14px;border-top:1px solid #dde2ea;padding-top:10px;">${cfg.nome} | CNPJ: ${cfg.cnpj} | Recibo nº ${r.num} | ${dataStr}</div>
+    </div>`;
+  }
+  else{
+    const discr=r.base!=null?`
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;">
+        <tr><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;">Salário/Base</td><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;text-align:right;">${money(r.base)}</td></tr>
+        <tr><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;">Adicionais</td><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;text-align:right;">${money(r.adic)}</td></tr>
+        <tr><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;">Insalubridade</td><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;text-align:right;">${money(r.insal)}</td></tr>
+        <tr><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;font-weight:700;">Total Bruto</td><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;text-align:right;font-weight:700;">${money(r.bruto)}</td></tr>
+        <tr><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;color:#c0392b;">(−) Desconto INSS 11%</td><td style="padding:5px 8px;border-bottom:1px solid #f0e0cc;text-align:right;color:#c0392b;">(${money(r.inss)})</td></tr>
+        <tr><td style="padding:6px 8px;font-weight:800;">TOTAL LÍQUIDO</td><td style="padding:6px 8px;text-align:right;font-weight:800;color:#1e7e4a;">${money(r.val)}</td></tr>
+      </table>`:'';
+    html=`<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto;padding:24px;border:2px solid #e67e22;border-radius:12px;">
+      <div style="display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:2px solid #e67e22;margin-bottom:16px;">
+        <div style="font-size:40px;">🌀</div>
+        <div><div style="font-size:18px;font-weight:700;color:#1a4f7a;">${cfg.nome}</div><div style="font-size:10px;color:#5a6a7a;">CNPJ: ${cfg.cnpj} | ${cfg.tel}</div></div>
+        <div style="margin-left:auto;text-align:right;"><div style="font-size:12px;font-weight:700;color:#e67e22;">RPA Nº ${r.num}</div><div style="font-size:11px;color:#8a9aaa;">${dataStr}</div></div>
+      </div>
+      <div style="text-align:center;font-size:18px;font-weight:700;color:#e67e22;background:#fef0e6;padding:10px;border-radius:8px;margin-bottom:16px;">RECIBO DE PAGAMENTO AUTÔNOMO (RPA)</div>
+      <div style="text-align:center;padding:16px;background:#fef0e6;border-radius:8px;margin-bottom:14px;border:2px solid #f5c06a;">
+        <div style="font-size:32px;font-weight:700;color:#e67e22;">${money(r.val)}</div>
+        <div style="font-size:12px;color:#5a6a7a;">Competência: ${compStr}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;">
+        <tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;width:35%;">Prestador:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${r.rpaNome}</strong></td></tr>
+        <tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">CPF:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.rpaCPF||'—'}</td></tr>
+        <tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">PIX:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.rpaPix||'—'}</td></tr>
+        <tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Tomador:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;"><strong>${cfg.nome}</strong> — CNPJ: ${cfg.cnpj}</td></tr>
+        <tr><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;font-weight:700;color:#5a6a7a;">Serviço:</td><td style="padding:6px 8px;border-bottom:1px solid #dde2ea;">${r.desc||''}</td></tr>
+        <tr><td style="padding:6px 8px;font-weight:700;color:#5a6a7a;">Competência:</td><td style="padding:6px 8px;">${compStr}</td></tr>
+      </table>
+      ${discr}
+      <p style="font-size:10px;color:#5a6a7a;background:#fef9e7;padding:8px;border-radius:6px;margin-bottom:14px;">Declaro ter recebido a importância acima pelos serviços prestados como profissional autônomo, ciente das minhas responsabilidades tributárias.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+        <div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Prestador<br><strong>${r.rpaNome}</strong><br>CPF: ${r.rpaCPF||'—'}</div>
+        <div style="border-top:1.5px solid #1c2b3a;padding-top:6px;text-align:center;font-size:10px;color:#5a6a7a;">Assinatura do Responsável<br><strong>${cfg.nome}</strong></div>
+      </div>
+    </div>`;
+  }
+  document.getElementById('print-area').innerHTML=html;window.print();setTimeout(()=>{document.getElementById('print-area').innerHTML='';},1500);
 }
 function renderRecibos(){
-  const el=document.getElementById('rec-lista');if(!ERP.recibos.length){el.innerHTML='<div class="info-box blue">Nenhum recibo emitido.</div>';return;}
-  el.innerHTML='<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>Tipo</th><th>Para</th><th>Competência</th><th>Valor</th><th>Data</th><th></th></tr></thead><tbody>'+[...ERP.recibos].reverse().map(r=>`<tr><td>${r.num}</td><td><span class="badge ${r.tipo==='cliente'?'b-blue':'b-orange'}">${r.tipo==='cliente'?'Cliente':'RPA'}</span></td><td>${r.cliNome||r.rpaNome||'—'}</td><td>${MESES[Number(r.comp?.split('-')[1])-1]||''} ${r.comp?.split('-')[0]||''}</td><td><strong>${fmt(r.val)}</strong></td><td>${r.data?new Date(r.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td><button class="btn btn-ghost btn-sm" onclick="imprimirRecibo(ERP.recibos.find(x=>x.id==='${r.id}'))">🖨️</button></td></tr>`).join('')+'</tbody></table></div></div>';
+  const el=document.getElementById('rec-lista');
+  const lista=[...ERP.recibos].reverse();
+  el.innerHTML=lista.length?'<div class="card" style="padding:0;"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>Tipo</th><th>Para</th><th>Competência</th><th>Valor</th><th>Data</th><th>Ações</th></tr></thead><tbody>'+
+    lista.map(r=>{const comp=r.comp?MESES[Number(r.comp.split('-')[1])-1]+'/'+r.comp.split('-')[0]:'—';
+      return`<tr><td><strong>${r.num}</strong></td><td><span class="badge ${r.tipo==='cliente'?'b-blue':'b-orange'}">${r.tipo==='cliente'?'Cliente':'RPA'}</span></td><td>${r.cliNome||r.rpaNome||'—'}</td><td>${comp}</td><td><strong style="color:var(--green)">${fmt(r.val)}</strong></td><td>${r.data?new Date(r.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td style="white-space:nowrap;"><button class="btn btn-primary btn-sm" onclick="imprimirRecibo(ERP.recibos.find(x=>x.id==='${r.id}'))">🖨️</button><button class="btn btn-danger btn-sm" onclick="excluirRecibo('${r.id}')">🗑️</button></td></tr>`;}).join('')+'</tbody></table></div></div>'
+    :'<div class="card" style="text-align:center;padding:24px;color:var(--text3);">Nenhum recibo gerado ainda. Use os botões acima para criar.</div>';
 }
+function excluirRecibo(id){if(!confirm('Excluir este recibo?'))return;ERP.recibos=ERP.recibos.filter(x=>x.id!==id);_marcarExcluido('recibos',id);salvarERP();renderRecibos();}
 
 // CONFIG
-function carregarConfig(){['cfg-nome','cfg-cnpj','cfg-tel','cfg-email','cfg-end'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=ERP.config[id.replace('cfg-','')]||'';});document.getElementById('cfg-regime').value=ERP.config.regime||'simples';document.getElementById('cfg-aliq').value=ERP.config.aliq||4.5;document.getElementById('cfg-das').value=ERP.config.dasDia||20;document.getElementById('cfg-jur').value=ERP.config.jurPerc||5;}
-function salvarConfig(){ERP.config={...ERP.config,nome:document.getElementById('cfg-nome').value.trim(),cnpj:document.getElementById('cfg-cnpj').value.trim(),tel:document.getElementById('cfg-tel').value.trim(),email:document.getElementById('cfg-email').value.trim(),end:document.getElementById('cfg-end').value.trim(),regime:document.getElementById('cfg-regime').value,aliq:Number(document.getElementById('cfg-aliq').value||6),dasDia:Number(document.getElementById('cfg-das').value||20),jurPerc:Number(document.getElementById('cfg-jur').value||5)};salvarERP();alert('✅ Salvo!');}
-
-// HELPERS
-function novoItem(){}
-document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m){m.classList.add('hidden');m.style.display='none';}}));
-
-
-// ================================================================
-// SINCRONIZAÇÃO COM GOOGLE SHEETS
-// ================================================================
-var ERP_SCRIPT_URL = '';
-
-function salvarURLErp(url){
-  ERP_SCRIPT_URL=url.trim();
-  localStorage.setItem('mjl_erp_script_url', ERP_SCRIPT_URL);
-  alert('✅ URL salva! Clique em Sincronizar.');
+function carregarConfig(){
+  const c=ERP.config;
+  document.getElementById('cfg-nome').value=c.nome||'';document.getElementById('cfg-cnpj').value=c.cnpj||'';
+  document.getElementById('cfg-tel').value=c.tel||'';document.getElementById('cfg-email').value=c.email||'';
+  document.getElementById('cfg-end').value=c.end||'';document.getElementById('cfg-regime').value=c.regime||'simples';
+  document.getElementById('cfg-aliq').value=c.aliq!=null?c.aliq:4.5;document.getElementById('cfg-das').value=c.dasDia||20;
+  document.getElementById('cfg-jur').value=c.jurPerc!=null?c.jurPerc:5;
+  const url=localStorage.getItem('mjl_erp_script_url')||'';
+  document.getElementById('erp-url-input').value=url;
 }
+function salvarConfig(){
+  ERP.config={...ERP.config,
+    nome:document.getElementById('cfg-nome').value.trim(),cnpj:document.getElementById('cfg-cnpj').value.trim(),
+    tel:document.getElementById('cfg-tel').value.trim(),email:document.getElementById('cfg-email').value.trim(),
+    end:document.getElementById('cfg-end').value.trim(),regime:document.getElementById('cfg-regime').value,
+    aliq:Number(document.getElementById('cfg-aliq').value||4.5),dasDia:Number(document.getElementById('cfg-das').value||20),
+    jurPerc:Number(document.getElementById('cfg-jur').value||5)};
+  salvarERP();alert('✅ Configurações salvas!');
+}
+function novoItem(){}
 
+document.querySelectorAll('.modal-overlay').forEach(ov=>{
+  ov.addEventListener('click',e=>{if(e.target===ov){ov.classList.add('hidden');ov.style.display='none';}});
+});
+
+// ===== SINCRONIZAÇÃO ERP ↔ SHEETS =====
+var ERP_SCRIPT_URL='';
+function salvarURLErp(url){
+  url=(url||'').trim();
+  if(!url){alert('Cole a URL do Apps Script.');return;}
+  if(!url.startsWith('https://script.google.com/')){if(!confirm('Essa URL não parece ser do Apps Script (script.google.com). Salvar mesmo assim?'))return;}
+  localStorage.setItem('mjl_erp_script_url',url);
+  ERP_SCRIPT_URL=url;
+  document.getElementById('sync-status').textContent='✅ URL salva! Clique em Sincronizar.';
+  document.getElementById('sync-status').style.color='var(--green)';
+}
 function carregarURLErp(){
   ERP_SCRIPT_URL=localStorage.getItem('mjl_erp_script_url')||'';
-  const el=document.getElementById('erp-url-input');
-  if(el)el.value=ERP_SCRIPT_URL;
 }
-
-function sincronizarERP(){
+async function carregarDoSheets(){
   const url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
-  if(!url){alert('Configure a URL do Sheets em Configurações primeiro.');return;}
-  if(!navigator.onLine){alert('Sem conexão com a internet.');return;}
-  
-  const btn=document.getElementById('btn-sync-erp');
-  if(btn){btn.textContent='⏳ Sincronizando...';btn.disabled=true;}
-  
-  // Sincronizar = busca do Sheets, MESCLA com o que está na tela (nunca
-  // substitui às cegas), e só então envia de volta.
-  fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
-    .then(function(r){return r.json();})
-    .then(function(data){
-      const mesclado=_mesclarComServidor(data||{});
-      CATS_SYNC.forEach(function(cat){ERP[cat]=mesclado[cat];});
-      ERP.config=mesclado.config;
-      localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
-      atualizarTudo();
-      const st=document.getElementById('sync-status');
-      if(st){st.textContent='✅ Sincronizado '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
-      if(temDados()) enviarParaSheets();
-    })
-    .catch(function(){
-      // Falhou a leitura do Sheets — NÃO envia nada (enviar sem ler primeiro
-      // era justamente o que fazia dados sumirem). Avisa e tenta depois.
-      _pendenteEnvio=true;
-      const st=document.getElementById('sync-status');
-      if(st){st.textContent='\u26a0\ufe0f Não consegui ler o Sheets agora. Nada foi enviado (proteção contra perda). Tente de novo em instantes.';st.style.color='var(--red)';}
-    })
-    .finally(function(){
-      if(btn){btn.textContent='☁️ Sincronizar';btn.disabled=false;}
-    });
+  if(!url)return false;
+  try{
+    const r=await fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}});
+    const serverData=await r.json();
+    if(!serverData)return false;
+    const mesclado=_mesclarComServidor(serverData);
+    CATS_SYNC.forEach(function(cat){ERP[cat]=mesclado[cat];});
+    ERP.config=mesclado.config;
+    localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
+    return true;
+  }catch(e){return false;}
 }
-
-// Auto-atualização a cada 5 minutos quando online.
-// IMPORTANTE: isso só BUSCA (pull) os dados mais recentes do Sheets para manter
-// abas/dispositivos alinhados — NÃO reenvia (push) automaticamente. Enviar só
-// acontece quando você salva algo ou clica em Sincronizar. Isso evita que uma
-// aba esquecida aberta sobrescreva a planilha com dados desatualizados.
+async function sincronizarERP(){
+  const url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
+  const st=document.getElementById('sync-status');
+  if(!url){if(st){st.textContent='⚠️ Cole a URL do Apps Script primeiro (Configurações).';st.style.color='var(--red)';}else alert('Configure a URL do Apps Script em Configurações.');return;}
+  if(st){st.textContent='☁️ Sincronizando...';st.style.color='var(--text3)';}
+  const ok=await carregarDoSheets();
+  if(ok){
+    atualizarTudo();
+    if(st){st.textContent='✅ Dados carregados do Sheets '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
+    enviarParaSheets();
+  }else{
+    if(st){st.textContent='⚠️ Não consegui ler o Sheets. Confira a URL e a implantação (Nova versão + acesso: Qualquer pessoa).';st.style.color='var(--red)';}
+  }
+}
 setInterval(function(){
-  const url=localStorage.getItem('mjl_erp_script_url');
-  if(url&&navigator.onLine){
-    if(_pendenteEnvio&&temDados())enviarParaSheets();else carregarDoSheets();
+  if(navigator.onLine&&(ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url'))){
+    carregarDoSheets().then(function(ok){if(ok)atualizarTudo();});
   }
 },5*60*1000);
-// Internet voltou → envia o que ficou pendente
 window.addEventListener('online',function(){
-  if(_pendenteEnvio&&temDados())enviarParaSheets();else carregarDoSheets();
+  if(_pendenteEnvio)enviarParaSheets();
 });
-// Outra aba do ERP salvou algo neste mesmo aparelho → recarrega na hora
 window.addEventListener('storage',function(e){
-  if(e.key==='mjl_erp_v2'&&e.newValue){try{ERP=JSON.parse(e.newValue);atualizarTudo();}catch(_){/*ignora*/}}
+  if(e.key==='mjl_erp_v2'&&e.newValue){
+    try{ERP=JSON.parse(e.newValue);atualizarTudo();}catch(err){}
+  }
 });
-// Voltou para esta aba (celular reabriu o navegador) → busca a versão atual
 document.addEventListener('visibilitychange',function(){
-  if(!document.hidden&&navigator.onLine){
-    if(_pendenteEnvio&&temDados())enviarParaSheets();else carregarDoSheets();
+  if(!document.hidden&&(ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url'))){
+    carregarDoSheets().then(function(ok){if(ok)atualizarTudo();});
   }
 });
-// ================================================================
 
-// INIT
+// ===== INIT =====
 carregarERP();
-popularMeses('filtro-mes');popularMeses('cc-mes');
-
-// Buscar dados do Sheets ao abrir
-function carregarDoSheets(){
-  var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
-  if(!url||!navigator.onLine) return Promise.resolve(false);
-  return fetch(url+'?acao=getAll',{redirect:'follow',headers:{'Accept':'application/json'}})
-    .then(function(r){return r.json();})
-    .then(function(data){
-      if(!data) return false;
-      const mesclado=_mesclarComServidor(data);
-      CATS_SYNC.forEach(function(cat){ERP[cat]=mesclado[cat];});
-      ERP.config=mesclado.config;
-      localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
-      atualizarTudo();
-      var st=document.getElementById('sync-status');
-      if(st){st.textContent='✅ Dados carregados do Sheets em '+new Date().toLocaleTimeString('pt-BR');st.style.color='var(--green)';}
-      return true;
-    })
-    .catch(function(){return false;});
+carregarURLErp();
+popularMeses('filtro-mes');
+popularMeses('cc-mes');
+if(!ERP.contas.some(c=>c.tipo==='provisao')){
+  ERP.contas.push({up:Date.now(),id:gid(),nome:'Provisão RH',tipo:'provisao',banco:'',saldo:0});
 }
-// Ao abrir: PRIMEIRO busca do Sheets, depois o app está pronto para uso
-// Nunca envia dados vazios para o Sheets
+if(!ERP.categorias.length){
+  [['Receita de Serviços','receita'],['Aporte de Capital','aporte'],['Rendimento Investimento','investimento'],['Resgate de Provisão','resgate'],
+   ['Aluguel / Escritório','despesa_fixa'],['Contabilidade','despesa_fixa'],['Internet / Telefone','despesa_fixa'],
+   ['Materiais / Insumos','despesa_var'],['Transporte / Combustível','despesa_var'],['Marketing','despesa_var'],
+   ['Folha CLT','pessoal'],['Pagamento RPA','pessoal'],['Vale Transporte','pessoal'],['Vale Refeição','pessoal'],['Encargos FGTS','imposto'],['Encargos INSS','imposto'],['DAS Simples','imposto'],['Provisão RH','provisao']
+  ].forEach(([nome,tipo])=>ERP.categorias.push({up:Date.now(),id:gid(),nome,tipo}));
+  localStorage.setItem('mjl_erp_v2',JSON.stringify(ERP));
+}
+resetFluxo();
+renderDash();
 setTimeout(function(){
-  var url=ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')||'';
-  if(url&&navigator.onLine){
-    carregarDoSheets();
+  if(ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url')){
+    carregarDoSheets().then(function(ok){if(ok)atualizarTudo();});
   }
-}, 1500);
-
-if(!ERP.contas.find(c=>c.id==='prov-rh'))ERP.contas.push({id:'prov-rh',nome:'Provisão RH',tipo:'provisao',banco:'',saldo:0});
-if(!ERP.categorias.length){ERP.categorias=[
-  {id:'r1',nome:'Serviços Fixos Mensais',tipo:'receita',sub:''},{id:'r2',nome:'Cobertura de Férias',tipo:'receita',sub:''},{id:'r3',nome:'Serviços Avulsos',tipo:'receita',sub:''},{id:'r4',nome:'Feriados Trabalhados',tipo:'receita',sub:''},{id:'r5',nome:'Aporte Próprio',tipo:'aporte',sub:''},{id:'r6',nome:'Resgate de Provisão',tipo:'resgate',sub:''},{id:'r7',nome:'Rendimento Investimento',tipo:'investimento',sub:''},
-  {id:'d1',nome:'Aluguel',tipo:'despesa_fixa',sub:''},{id:'d2',nome:'Contador',tipo:'despesa_fixa',sub:''},{id:'d3',nome:'Telefone/Internet',tipo:'despesa_fixa',sub:''},{id:'d4',nome:'Seguro',tipo:'despesa_fixa',sub:''},{id:'d5',nome:'Software/Sistemas',tipo:'despesa_fixa',sub:''},
-  {id:'d6',nome:'Transporte/Combustível',tipo:'despesa_var',sub:''},{id:'d7',nome:'Material de Limpeza',tipo:'despesa_var',sub:''},{id:'d8',nome:'EPI/Uniformes',tipo:'despesa_var',sub:''},{id:'d9',nome:'Marketing',tipo:'despesa_var',sub:''},{id:'d10',nome:'Alimentação',tipo:'despesa_var',sub:''},
-  {id:'p1',nome:'Folha CLT',tipo:'pessoal',sub:''},{id:'p2',nome:'Pagamento RPA',tipo:'pessoal',sub:''},{id:'p3',nome:'Encargos FGTS',tipo:'pessoal',sub:''},{id:'p4',nome:'Encargos INSS',tipo:'pessoal',sub:''},
-  {id:'i1',nome:'DAS/Simples Nacional',tipo:'imposto',sub:''},{id:'i2',nome:'ISS',tipo:'imposto',sub:''},{id:'i3',nome:'IRRF',tipo:'imposto',sub:''},
-  {id:'pv1',nome:'Provisão RH (Férias/13°)',tipo:'provisao',sub:''},{id:'pv2',nome:'Provisão Rescisão',tipo:'provisao',sub:''},{id:'pv3',nome:'Reserva Emergência',tipo:'provisao',sub:''}
-];}
-salvarERP();carregarURLErp();resetFluxo();renderDash();
-
-
-// ===== OFFLINE: service worker guarda o app no aparelho =====
-if('serviceWorker' in navigator && location.protocol==='https:'){
-  navigator.serviceWorker.register('./sw.js').catch(function(){});
-}
+},1500);
 </script>
 </body>
 </html>

@@ -2019,6 +2019,13 @@ function fecharFolhaMes(){
   if(!_fmItens.length)return;
   if(!confirm('Fechar a folha de '+_mesLabel(mes)+'?\n\nSerão geradas as contas a pagar (salário líquido + FGTS) de cada colaborador, com os rateios por condomínio.'))return;
   if(!salvarFolhaMes(true))return;
+  // Segurança contra duplicação: remove qualquer salário "folha real" que já exista neste mês antes de gerar de novo
+  const remanescentes=ERP.pagar.filter(p=>p.folha&&(p.comp||p.venc?.slice(0,7))===mes);
+  if(remanescentes.length){
+    remanescentes.forEach(p=>_marcarExcluido('pagar',p.id));
+    const ids=new Set(remanescentes.map(p=>p.id));
+    ERP.pagar=ERP.pagar.filter(p=>!ids.has(p.id));
+  }
   const f=ERP.folhas.find(x=>x.comp===mes);
   f.fechada=true;f.up=Date.now();
   _fmItens.forEach(it=>{
@@ -2033,8 +2040,28 @@ function fecharFolhaMes(){
 function reabrirFolhaMes(){
   const mes=getMes();
   const f=ERP.folhas.find(x=>x.comp===mes);if(!f)return;
-  if(!confirm('Reabrir a folha de '+_mesLabel(mes)+'?\n\n⚠️ As contas a pagar já geradas NÃO são apagadas — se for regerar, exclua as antigas em Contas a Pagar (marcadas com "folha real").'))return;
-  f.fechada=false;f.up=Date.now();salvarERP();renderFolhaMes();
+  // Quais lançamentos "folha real" deste mês serão removidos ao reabrir
+  const antigos=ERP.pagar.filter(p=>p.folha&&(p.comp||p.venc?.slice(0,7))===mes);
+  const pendentes=antigos.filter(p=>p.st==='pendente');
+  const jaPagos=antigos.filter(p=>p.st==='pago');
+  let aviso='Reabrir a folha de '+_mesLabel(mes)+'?\n\n';
+  if(antigos.length){
+    aviso+='✅ Ao reabrir, os '+antigos.length+' lançamento(s) de salário "folha real" deste mês serão APAGADOS automaticamente — assim, quando você fechar de novo, nada duplica.\n\n';
+    if(jaPagos.length){
+      aviso+='⚠️ ATENÇÃO: '+jaPagos.length+' desse(s) lançamento(s) já está(ão) marcado(s) como PAGO(s). Se você já pagou de verdade, confira depois se os novos valores batem com o que saiu do caixa.\n\n';
+    }
+    aviso+='(Só apago os de salário desta folha. Guias de FGTS/INSS, despesas e impostos NÃO são tocados.)';
+  } else {
+    aviso+='Nenhum lançamento de salário deste mês foi encontrado — nada será apagado.';
+  }
+  if(!confirm(aviso))return;
+  // Remove os salários "folha real" do mês (com tombstone pra não voltarem na sincronização)
+  antigos.forEach(p=>_marcarExcluido('pagar',p.id));
+  const idsRemover=new Set(antigos.map(p=>p.id));
+  ERP.pagar=ERP.pagar.filter(p=>!idsRemover.has(p.id));
+  f.fechada=false;f.up=Date.now();
+  salvarERP();renderFolhaMes();
+  if(antigos.length)alert('🔓 Folha reaberta e '+antigos.length+' salário(s) antigo(s) removido(s). Ajuste o que precisar e clique em ✅ Fechar folha — os lançamentos serão gerados limpos, sem duplicar.');
 }
 function imprimirFolhaMes(){
   const mes=getMes();

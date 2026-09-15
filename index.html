@@ -2958,6 +2958,7 @@ function imprimirProposta(p){
     <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
   </div>`:''}
 
+  <!-- PÁGINA 3: Descrição do Projeto + Responsabilidades + Planejamento -->
   <div class="pg"><div class="pad">
     ${B.resp!==false?`<div style="text-align:right;"><h2>Descrição do Projeto</h2><div class="h2b" style="font-size:28px;">Especificações</div><div class="risco">/////</div></div>
     <h3>Projeto — ${p.cli}</h3>
@@ -2969,23 +2970,22 @@ function imprimirProposta(p){
     <div style="border-top:3px solid ${AZULC};margin:14px 0;"></div>`:`<div style="text-align:right;"><h2>Orçamento</h2><div class="h2b" style="font-size:28px;">Detalhado</div><div class="risco">/////</div></div>`}
     <h3>Planejamento Técnico e Operacional</h3>
     <p>A MJL selecionará uma equipe qualificada e capacitada para as atividades. O planejamento será adaptado às necessidades específicas do ${p.cli} e poderá ser consultado após a aceitação e assinatura do contrato. ${matTxt}</p>
-    <h3 style="margin-top:16px;">Investimento Detalhado Mensal</h3>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
+  </div></div>
+
+  <!-- PÁGINA 4: Investimento Detalhado + Composição de Custos (quando ativa) -->
+  <div class="pg"><div class="pad">
+    <div style="text-align:right;"><h2>Investimento</h2><div class="h2b" style="font-size:28px;">Detalhado Mensal</div><div class="risco">/////</div></div>
+    <div style="border-top:3px solid ${AZULC};margin:10px 0 16px;"></div>
     ${p.postos.map(x=>`<div class="invest-row"><span><strong>${x.qtd>1?x.qtd+' × ':''}${x.funcao}</strong>${x.escala?' — '+x.escala:''}</span><span class="v">${fmt(x.qtd*x.val)}</span></div>`).join('')}
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 2px;margin-top:6px;border-top:2px solid ${AZUL};">
       <span style="font-weight:800;font-size:15px;">Investimento Total Mensal</span>
       <span style="font-weight:800;font-size:17px;color:${AZUL};border-left:1.5px solid #cbd5e0;padding-left:14px;">${fmt(tot)}</span>
     </div>
     <p style="font-size:11px;color:#888;margin-top:4px;">Já inclusos todos os impostos, encargos, benefícios, uniformes e material de limpeza.</p>
-    ${B.comp?`<h3>Composição de Custos</h3>${paras(p.tComp)}`:''}
+    ${B.comp?`<div style="border-top:3px solid ${AZULC};margin:20px 0 14px;"></div><h3>Composição de Custos</h3>${paras(p.tComp)}`:''}
     <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
   </div></div>
-
-  ${B.comp?`<div class="pg"><div class="pad">
-    <div style="text-align:right;"><h2>Composição</h2><div class="h2b" style="font-size:28px;">de Custos</div><div class="risco">/////</div></div>
-    <div style="border-top:3px solid ${AZULC};margin:10px 0 18px;"></div>
-    ${paras(p.tComp)}
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
-  </div></div>`:''}
 
   <div class="pg"><div class="pad">
     ${B.resumo!==false?`<h2>Resumo das</h2><div class="h2b" style="font-size:26px;">Condições Contratuais</div><div class="risco">/////</div>

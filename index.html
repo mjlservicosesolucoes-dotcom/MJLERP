@@ -487,7 +487,7 @@ tr:hover td{background:#fafbff;}
       <div class="card">
         <div class="card-title">Dados da Empresa</div>
         <div class="fr"><div class="fg"><label>Razão Social</label><input id="cfg-nome" value="MJL Servicos e Solucoes"></div><div class="fg"><label>CNPJ</label><input id="cfg-cnpj" value="46.636.732/0001-73"></div></div>
-        <div class="fr"><div class="fg"><label>Telefone</label><input id="cfg-tel" value="(21) 96838-1313"></div><div class="fg"><label>E-mail</label><input id="cfg-email" value="mjlservicosesolucoes@gmail.com"></div></div>
+        <div class="fr"><div class="fg"><label>Telefone</label><input id="cfg-tel" value="(21) 96838-1313"></div><div class="fg"><label>E-mail</label><input id="cfg-email" value="contato@mjlservicosesolucoes.com.br"></div></div>
         <div class="fr"><div class="fg"><label>Endereço</label><input id="cfg-end"></div><div class="fg"><label>Regime Tributário</label><select id="cfg-regime"><option value="simples">Simples Nacional</option><option value="lp">Lucro Presumido</option></select></div></div>
         <div class="fr"><div class="fg"><label>Alíquota Simples (%)</label><input type="number" id="cfg-aliq" value="4.5" step="0.01"></div><div class="fg"><label>Dia vencimento DAS</label><input type="number" id="cfg-das" value="20"></div></div>
         <div class="fr"><div class="fg"><label>% Jurídico/Rescisão (provisão)</label><input type="number" id="cfg-jur" value="5" step="0.01"></div><div class="fg"><label>Férias+1/3 mensal</label><input value="11,11% do salário" readonly style="background:var(--bg);"></div></div>
@@ -927,7 +927,7 @@ tr:hover td{background:#fafbff;}
 
 <script>
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'mjlservicosesolucoes@gmail.com',end:'',regime:'simples',aliq:4.5,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[],propostas:[],produtos:[],estoqueMov:[],folhas:[],certidoes:[],planilhasCusto:[]};
+let ERP={config:{nome:'MJL Servicos e Solucoes',cnpj:'46.636.732/0001-73',tel:'(21) 96838-1313',email:'contato@mjlservicosesolucoes.com.br',end:'',regime:'simples',aliq:4.5,dasDia:20,jurPerc:5},clientes:[],colaboradores:[],servicos:[],categorias:[],receber:[],pagar:[],impostos:[],vendas:[],movimentos:[],contas:[],recibos:[],propostas:[],produtos:[],estoqueMov:[],folhas:[],certidoes:[],planilhasCusto:[]};
 const CATS_SYNC=['clientes','colaboradores','servicos','categorias','receber','pagar','impostos','vendas','contas','movimentos','recibos','propostas','produtos','estoqueMov','folhas','certidoes','planilhasCusto'];
 let _syncDebounceTimer=null;
 var _pendenteEnvio=false;
@@ -2018,20 +2018,6 @@ function abrirModalRecibo(tipo){
 
 // ===== FOLHA DO MÊS — APONTAMENTOS REAIS =====
 let _fmItens=[];
-let _fmMes=''; // controla para qual mês _fmItens foi carregado — evita reset pelo auto-sync
-let _fmAutoSaveTimer=null;
-
-// Auto-save com debounce: persiste _fmItens no ERP local ~800ms após o usuário
-// digitar qualquer campo. Isso garante que, quando o auto-sync buscar o Sheets
-// e chamar atualizarTudo(), o estado local já está salvo e tem prioridade
-// na mesclagem — os campos NÃO são resetados.
-function _fmAutoSave(){
-  if(_fmAutoSaveTimer)clearTimeout(_fmAutoSaveTimer);
-  _fmAutoSaveTimer=setTimeout(function(){
-    salvarFolhaMes(true);
-    _fmAutoSaveTimer=null;
-  },800);
-}
 function _fmCalcItem(it){
   const proventos=Number(it.base||0)+Number(it.he||0)+Number(it.not||0)+Number(it.insal||0)+Number(it.peric||0)+Number(it.dsr||0)+Number(it.outros||0);
   const benef=0;
@@ -2092,53 +2078,39 @@ function renderFolhaMes(){
              :`<span class="badge b-yellow">📝 Rascunho salvo de ${_mesLabel(mes)}</span>`)
     :`<span class="badge b-gray">Nova folha de ${_mesLabel(mes)} — pré-preenchida com o cadastro</span>`;
   document.getElementById('fm-reabrir').style.display=fechada?'':'none';
-
-  // BUG FIX: só recarrega _fmItens do ERP.folhas se:
-  // (a) mudou de mês, (b) folha foi fechada/reaberta, ou (c) não há dados na memória.
-  // Se o usuário está editando campos neste mês (folha aberta), preserva o que está
-  // em _fmItens na memória — o auto-sync nunca mais vai resetar os campos no meio da edição.
-  const deveRecarregar = fechada || _fmMes!==mes || !_fmItens.length;
-  if(deveRecarregar){
-    _fmMes=mes;
-    if(salva){_fmItens=salva.itens.map(x=>({...x}));}
-    else{
-      _fmItens=ERP.colaboradores.filter(c=>c.ativo!==false).map(c=>({
-        colabId:c.id,nome:c.nome,func:c.func||'',tipo:c.tipo||'CLT',rateios:c.rateios,ccId:c.ccId||'',
-        base:Number(c.sal||0),he:Number(c.he||0),not:Number(c.adnot||0),insal:Number(c.insal||0),peric:Number(c.peric||0),dsr:0,outros:Number(c.outros||0),descs:0,liquido:null,_liqManual:false,
-        // BUG FIX 2: CLT sempre paga no mês seguinte por padrão
-        pagProx:c.tipo!=='CLT'?undefined:undefined // CLT não usa pagProx — sempre cai no mês seguinte via fecharFolhaMes
-      }));
-    }
+  if(salva){_fmItens=salva.itens.map(x=>({...x}));}
+  else{
+    _fmItens=ERP.colaboradores.filter(c=>c.ativo!==false).map(c=>({
+      colabId:c.id,nome:c.nome,func:c.func||'',tipo:c.tipo||'CLT',rateios:c.rateios,ccId:c.ccId||'',
+      base:Number(c.sal||0),he:Number(c.he||0),not:Number(c.adnot||0),insal:Number(c.insal||0),peric:Number(c.peric||0),dsr:0,outros:Number(c.outros||0),descs:0,liquido:null,_liqManual:false
+    }));
   }
   const dis=fechada?'disabled':'';
-  // BUG FIX: _fmAutoSave() adicionado em todos os oninput para persistir
-  // o estado local antes que o auto-sync possa sobrescrever
-  const inp=(i,campo,val)=>`<input type="number" step="0.01" value="${val||0}" ${dis} style="width:86px;padding:5px 6px;font-size:12px;" oninput="_fmItens[${i}].${campo}=Number(this.value)||0;_fmAtualizarLinha(${i});_fmAutoSave()">`;
+  const inp=(i,campo,val)=>`<input type="number" step="0.01" value="${val||0}" ${dis} style="width:86px;padding:5px 6px;font-size:12px;" oninput="_fmItens[${i}].${campo}=Number(this.value)||0;_fmAtualizarLinha(${i})">`;
   document.getElementById('fm-tabela').innerHTML=_fmItens.length?`<div class="card" style="padding:0;"><div class="table-wrap"><table>
     <thead><tr><th>Colaborador</th><th>Base (R$)</th><th>H. Extra</th><th>Ad. Not.</th><th>Insalub.</th><th>Peric.</th><th>DSR/Refl.</th><th>Outros</th><th>Descontos</th><th>Proventos</th><th>INSS 11% (RPA)</th><th>Líquido a pagar</th><th>Pagar em</th><th>FGTS 8%</th><th>Provisões</th><th>Custo total</th><th></th></tr></thead>
     <tbody>${_fmItens.map((it,i)=>{const c=_fmCalcItem(it);
       const pagCell=it.tipo==='RPA'
-        ? `<select ${dis} style="padding:4px 6px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;" onchange="_fmItens[${i}].pagProx=(this.value==='prox');_fmTotais();_fmAutoSave()">
-             <option value="mes" ${it.pagProx===false?'selected':''}>Mesmo mês (avulso)</option>
-             <option value="prox" ${it.pagProx!==false?'selected':''}>Mês seguinte (mensalista)</option>
+        ? `<select ${dis} style="padding:4px 6px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;" onchange="_fmItens[${i}].pagProx=(this.value==='prox');_fmTotais()">
+             <option value="mes" ${!it.pagProx?'selected':''}>Mesmo mês (avulso)</option>
+             <option value="prox" ${it.pagProx?'selected':''}>Mês seguinte</option>
            </select>`
-        : `<span style="font-size:10px;color:var(--brand);">📅 Mês seguinte</span>`;
+        : `<span style="font-size:10px;color:var(--text3);">mês da folha</span>`;
       return`<tr>
         <td><strong>${it.nome}</strong><div style="font-size:10px;color:var(--text3)">${it.tipo} · ${it.func||'—'}</div></td>
         <td>${inp(i,'base',it.base)}</td><td>${inp(i,'he',it.he)}</td><td>${inp(i,'not',it.not)}</td>
         <td>${inp(i,'insal',it.insal)}</td><td>${inp(i,'peric',it.peric)}</td><td>${inp(i,'dsr',it.dsr)}</td>
-        <td>${inp(i,'outros',it.outros)}</td>
-        <td><input type="number" step="0.01" value="${it.descs||0}" ${dis} style="width:86px;padding:5px 6px;font-size:12px;" oninput="_fmItens[${i}].descs=Number(this.value)||0;_fmAtualizarLinha(${i});_fmAutoSave()"></td>
+        <td>${inp(i,'outros',it.outros)}</td><td>${inp(i,'descs',it.descs)}</td>
         <td id="fm-prov-${i}" style="font-weight:700;">${fmt(c.proventos)}</td>
         <td id="fm-inss-${i}" style="color:var(--orange);">${it.tipo==='RPA'?fmt(c.inssRpa):'—'}</td>
-        <td><input type="number" step="0.01" id="fm-liq-${i}" value="${(it._liqManual&&it.liquido!=null?Number(it.liquido):c.liquidoAuto).toFixed(2)}" ${dis} style="width:96px;padding:5px 6px;font-size:12px;font-weight:700;" oninput="_fmItens[${i}].liquido=Number(this.value)||0;_fmItens[${i}]._liqManual=true;_fmTotais();_fmAutoSave()"></td>
+        <td><input type="number" step="0.01" id="fm-liq-${i}" value="${(it._liqManual&&it.liquido!=null?Number(it.liquido):c.liquidoAuto).toFixed(2)}" ${dis} style="width:96px;padding:5px 6px;font-size:12px;font-weight:700;" oninput="_fmItens[${i}].liquido=Number(this.value)||0;_fmItens[${i}]._liqManual=true;_fmTotais()"></td>
         <td>${pagCell}</td>
         <td id="fm-fgts-${i}">${fmt(c.fgts)}</td>
         <td id="fm-provt-${i}" style="color:var(--purple);font-weight:700;">${fmt(c.provTot)}</td>
         <td id="fm-cust-${i}" style="color:var(--red);font-weight:700;">${fmt(c.custoTotal)}</td>
         <td>${dis?'':`<button class="btn btn-danger btn-sm" onclick="_fmRemoverLinha(${i})" title="Remover este colaborador SÓ deste mês — não mexe no cadastro">🗑️</button>`}</td>
       </tr>`;}).join('')}</tbody></table></div></div>
-    <div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 Os campos são salvos automaticamente enquanto você edita. <strong>CLT</strong> sempre cai no pagamento do mês seguinte (trabalhou em Julho, recebe em Agosto). <strong>RPA mensalista</strong>: selecione "Mês seguinte". <strong>RPA diária avulsa</strong>: selecione "Mesmo mês". Use 🗑️ pra remover quem apareceu por engano.</div>`
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 "Líquido a pagar" já vem com o INSS de 11% descontado automaticamente para RPA (VT/VA não entram aqui — são pagos à parte, integrais). Coluna <strong>"Pagar em"</strong>: escolha <strong>Mês seguinte</strong> pro RPA mensalista (trabalha neste mês, recebe no próximo — a conta a pagar e o Centro de Custo caem no mês do pagamento). Deixe <strong>Mesmo mês</strong> pra diária avulsa. Use o 🗑️ pra remover quem apareceu por engano.</div>`
     :'<div class="card" style="text-align:center;padding:24px;color:var(--text3);">Cadastre colaboradores ativos primeiro.</div>';
   _fmTotais();
 }
@@ -2175,16 +2147,13 @@ function fecharFolhaMes(){
   }
   const f=ERP.folhas.find(x=>x.comp===mes);
   f.fechada=true;f.up=Date.now();
-  _fmMes=''; // força recarga na próxima renderização (folha fechada = estado congelado)
   let algumProx=false;
   _fmItens.forEach(it=>{
     const c=_fmCalcItem(it);
     const liq=(it._liqManual&&it.liquido!=null)?Number(it.liquido):c.liquidoAuto;
     const rat=(it.rateios&&it.rateios.length)?it.rateios:undefined;
-    // BUG FIX: CLT sempre paga no mês seguinte (trabalhou em Julho → recebe em Agosto).
-    // RPA mensalista: pagProx !== false (padrão é mês seguinte agora).
-    // RPA diária avulsa: pagProx === false (único caso que fica no mês atual).
-    const pagProx = it.tipo==='CLT' || it.pagProx!==false;
+    // RPA marcado como "mês seguinte": competência de pagamento e vencimento vão para o mês seguinte
+    const pagProx=(it.tipo==='RPA'&&it.pagProx);
     const compPagto=pagProx?_addMes(mes,1):mes;
     if(pagProx)algumProx=true;
     const tag=pagProx?' · folha real (comp. '+_mesLabelCurto(mes)+')':' · folha real';
@@ -2216,7 +2185,6 @@ function reabrirFolhaMes(){
   const idsRemover=new Set(antigos.map(p=>p.id));
   ERP.pagar=ERP.pagar.filter(p=>!idsRemover.has(p.id));
   f.fechada=false;f.up=Date.now();
-  _fmMes=''; // força recarga na próxima renderização (folha reaberta para edição)
   salvarERP();renderFolhaMes();
   if(antigos.length)alert('🔓 Folha reaberta e '+antigos.length+' salário(s) antigo(s) removido(s). Ajuste o que precisar e clique em ✅ Fechar folha — os lançamentos serão gerados limpos, sem duplicar.');
 }
@@ -2263,7 +2231,7 @@ function _abrirRelatorio(titulo,corpo,periodo){
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
   </style></head><body>
     <div class="cab">
-      <div><div class="emp">MJL Serviços e Soluções LTDA</div><div class="peq">CNPJ 46.636.732/0001-73 · Rio de Janeiro/RJ · (21) 96838-1313 · mjlservicosesolucoes@gmail.com</div></div>
+      <div><div class="emp">MJL Serviços e Soluções LTDA</div><div class="peq">CNPJ 46.636.732/0001-73 · Rio de Janeiro/RJ · (21) 96838-1313 · contato@mjlservicosesolucoes.com.br</div></div>
       <div style="text-align:right;"><h1>${titulo}</h1><div class="peq">${periodo||''}</div></div>
     </div>
     ${corpo}
@@ -2972,7 +2940,7 @@ function imprimirProposta(p){
       ${p.end?`<div style="font-size:11px;color:#888;">${p.end}</div>`:''}
       <div style="margin-top:16px;font-size:15px;font-weight:600;">MJL Serviços e Soluções</div>
       <div style="margin-top:8px;font-size:12px;color:#444;display:flex;align-items:center;gap:8px;"><span style="color:${AZUL};font-size:15px;">📞</span> (21) 9 6838-1313</div>
-      <div style="margin-top:4px;font-size:12px;color:#444;display:flex;align-items:center;gap:8px;"><span style="color:${AZUL};font-size:15px;">✉️</span> mjlservicosesolucoes@gmail.com</div>
+      <div style="margin-top:4px;font-size:12px;color:#444;display:flex;align-items:center;gap:8px;"><span style="color:${AZUL};font-size:15px;">✉️</span> contato@mjlservicosesolucoes.com.br</div>
       <div style="border-top:3px solid ${AZULC};width:60px;margin:16px 0;"></div>
       <div style="font-size:11px;color:#888;">Nº da Proposta:</div><div style="font-size:14px;font-weight:800;">${p.num}</div>
       <div style="font-size:11px;color:#888;margin-top:8px;">Data de Emissão:</div><div style="font-size:14px;font-weight:800;">${fmtD(p.data)}</div>
@@ -2987,7 +2955,7 @@ function imprimirProposta(p){
       <h3>Quem Somos</h3>${paras(p.tSobre)}
       <h3 style="margin-top:22px;">Porque Escolher a MJL</h3><ul>${bullets(p.tPorque)}</ul>
     </div>
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — mjlservicosesolucoes@gmail.com</div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
   </div>`:''}
 
   <div class="pg"><div class="pad">
@@ -3009,8 +2977,15 @@ function imprimirProposta(p){
     </div>
     <p style="font-size:11px;color:#888;margin-top:4px;">Já inclusos todos os impostos, encargos, benefícios, uniformes e material de limpeza.</p>
     ${B.comp?`<h3>Composição de Custos</h3>${paras(p.tComp)}`:''}
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — mjlservicosesolucoes@gmail.com</div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
   </div></div>
+
+  ${B.comp?`<div class="pg"><div class="pad">
+    <div style="text-align:right;"><h2>Composição</h2><div class="h2b" style="font-size:28px;">de Custos</div><div class="risco">/////</div></div>
+    <div style="border-top:3px solid ${AZULC};margin:10px 0 18px;"></div>
+    ${paras(p.tComp)}
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
+  </div></div>`:''}
 
   <div class="pg"><div class="pad">
     ${B.resumo!==false?`<h2>Resumo das</h2><div class="h2b" style="font-size:26px;">Condições Contratuais</div><div class="risco">/////</div>
@@ -3021,7 +2996,7 @@ function imprimirProposta(p){
     <p>Estamos à disposição para quaisquer esclarecimentos e para formalizar esta parceria.</p>
     <p style="margin-top:16px;">Rio de Janeiro, ${fmtD(p.data)}</p>
     <div class="ass"><div>MJL Serviços e Soluções</div><div>${p.cli}</div></div>
-    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — mjlservicosesolucoes@gmail.com</div>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
   </div></div>
   <script>window.onload=function(){window.print();};</scr`+`ipt></body></html>`;
   const w=window.open('','_blank');w.document.write(html);w.document.close();

@@ -804,22 +804,45 @@ tr:hover td{background:#fafbff;}
         <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-resp" checked> 📋 Responsabilidades</label>
         <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-resumo" checked> 📑 Resumo contratual</label>
         <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-comp"> 💰 Composição de custos aberta</label>
-        <label id="mpr-b-mat-label" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-mat"> 🧴 Anexo: Lista de materiais</label>
+        <label id="mpr-b-mat-label" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-mat"> 🧴 Anexo: Materiais (uso mensal)</label>
+        <label id="mpr-b-equip-label" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-equip"> 🛒 Anexo: Equipamentos</label>
         <label id="mpr-b-demo-label" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="mpr-b-demo"> 🖼️ Anexo: Demonstrativo visual</label>
       </div>
     </div>
 
-    <!-- SEÇÃO DE MATERIAIS — visível só quando "MJL fornece materiais" -->
+    <!-- SEÇÃO DE MATERIAIS/EQUIPAMENTOS — visível só quando "MJL fornece materiais" -->
     <div id="mpr-mat-section" style="display:none;background:var(--brand-light);border:1.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <label style="font-size:11px;font-weight:700;color:var(--brand);">🧴 LISTA DE MATERIAIS DE LIMPEZA</label>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-ghost btn-sm" onclick="restaurarMateriaisPadrao()" title="Restaurar lista padrão">↺ Padrão</button>
-          <button class="btn btn-primary btn-sm" onclick="addMaterialProp()">+ Item</button>
-        </div>
+      <!-- Abas -->
+      <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:2px solid var(--border);">
+        <button id="tab-mat-btn" class="btn btn-primary btn-sm" style="border-radius:6px 6px 0 0;margin-right:4px;" onclick="switchTab('mat')">🧴 Materiais de Limpeza<br><span style="font-size:9px;opacity:.8;">consumíveis mensais</span></button>
+        <button id="tab-equip-btn" class="btn btn-ghost btn-sm" style="border-radius:6px 6px 0 0;" onclick="switchTab('equip')">🛒 Equipamentos<br><span style="font-size:9px;opacity:.8;">uso no condomínio</span></button>
       </div>
-      <div id="mpr-mat-lista"></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 Clique em 📷 para adicionar foto real ou escolher ícone ilustrativo. O Anexo de materiais e o demonstrativo visual só aparecem no PDF se os blocos acima estiverem marcados.</div>
+
+      <!-- Aba Materiais -->
+      <div id="tab-mat-content">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:700;color:var(--brand);">MATERIAIS DE LIMPEZA <span class="badge b-green" style="font-size:9px;">Uso Mensal</span></label>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="restaurarMateriaisPadrao()" title="Restaurar lista padrão">↺ Padrão</button>
+            <button class="btn btn-primary btn-sm" onclick="addMaterialProp()">+ Item</button>
+          </div>
+        </div>
+        <div id="mpr-mat-lista"></div>
+      </div>
+
+      <!-- Aba Equipamentos -->
+      <div id="tab-equip-content" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:700;color:var(--brand);">EQUIPAMENTOS <span class="badge b-blue" style="font-size:9px;">Patrimônio MJL no local</span></label>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="restaurarEquipamentosPadrao()" title="Restaurar lista padrão">↺ Padrão</button>
+            <button class="btn btn-primary btn-sm" onclick="addEquipamentoProp()">+ Item</button>
+          </div>
+        </div>
+        <div id="mpr-equip-lista"></div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">💡 Clique em 📷 para adicionar foto real ou escolher ícone. Os anexos aparecem no PDF conforme os blocos marcados acima.</div>
     </div>
 
     <!-- MODAL ÍCONE/FOTO (inline, pequeno) -->
@@ -2743,21 +2766,42 @@ const MATERIAIS_ICONS={
   esponja:'<svg viewBox="0 0 40 40"><rect x="6" y="14" width="28" height="16" rx="4" fill="#fff176"/><line x1="12" y1="14" x2="12" y2="30" stroke="#f9a825" stroke-width="1"/><line x1="18" y1="14" x2="18" y2="30" stroke="#f9a825" stroke-width="1"/><line x1="24" y1="14" x2="24" y2="30" stroke="#f9a825" stroke-width="1"/></svg>',
   fibra:'<svg viewBox="0 0 40 40"><rect x="6" y="14" width="28" height="14" rx="3" fill="#ef9a9a"/><line x1="10" y1="17" x2="30" y2="17" stroke="#c62828" stroke-width="1.5"/><line x1="10" y1="21" x2="30" y2="21" stroke="#c62828" stroke-width="1.5"/><line x1="10" y1="25" x2="30" y2="25" stroke="#c62828" stroke-width="1.5"/></svg>',
   hipoclorito:'<svg viewBox="0 0 40 40"><rect x="12" y="6" width="16" height="28" rx="4" fill="#e0f7fa"/><rect x="14" y="6" width="12" height="5" rx="2" fill="#80deea"/><text x="20" y="26" text-anchor="middle" font-size="7" fill="#00838f">Cloro</text></svg>',
-  limpa_vidros:'<svg viewBox="0 0 40 40"><rect x="14" y="4" width="12" height="28" rx="4" fill="#e3f2fd"/><path d="M17 4 L17 0 L23 0 L23 4" fill="#42a5f5"/><path d="M22 8 L25 4" stroke="#64b5f6" stroke-width="2"/><text x="20" y="26" text-anchor="middle" font-size="7" fill="#1565c0">Vidros</text></svg>',
+  limpa_vidros:'<svg viewBox="0 0 40 40"><rect x="14" y="4" width="12" height="28" rx="4" fill="#e3f2fd"/><path d="M17 4 L17 0 L23 0 L23 4" fill="#42a5f5"/><text x="20" y="26" text-anchor="middle" font-size="7" fill="#1565c0">Vidros</text></svg>',
   mop:'<svg viewBox="0 0 40 40"><line x1="20" y1="4" x2="20" y2="26" stroke="#8d6e63" stroke-width="3"/><path d="M10 26 Q15 22 20 26 Q25 30 30 26 L30 34 Q25 38 20 34 Q15 38 10 34 Z" fill="#90a4ae"/></svg>',
   pa_lixo:'<svg viewBox="0 0 40 40"><line x1="20" y1="4" x2="20" y2="22" stroke="#8d6e63" stroke-width="2.5"/><path d="M10 22 L30 22 L26 36 L14 36 Z" fill="#bdbdbd"/></svg>',
   pano_chao:'<svg viewBox="0 0 40 40"><rect x="4" y="18" width="32" height="12" rx="3" fill="#b3e5fc"/><line x1="4" y1="22" x2="36" y2="22" stroke="#81d4fa" stroke-width="1.5"/><line x1="4" y1="26" x2="36" y2="26" stroke="#81d4fa" stroke-width="1.5"/></svg>',
   pulverizador:'<svg viewBox="0 0 40 40"><rect x="14" y="14" width="16" height="20" rx="3" fill="#f8bbd0"/><path d="M22 14 L22 8 L30 8" fill="none" stroke="#f06292" stroke-width="2"/><circle cx="30" cy="8" r="3" fill="#e91e63"/></svg>',
-  rodo:'<svg viewBox="0 0 40 40"><line x1="20" y1="4" x2="20" y2="28" stroke="#8d6e63" stroke-width="2.5"/><rect x="6" y="28" width="28" height="6" rx="3" fill="#78909c"/><line x1="10" y1="28" x2="10" y2="34" stroke="#546e7a" stroke-width="1.5"/><line x1="16" y1="28" x2="16" y2="34" stroke="#546e7a" stroke-width="1.5"/><line x1="22" y1="28" x2="22" y2="34" stroke="#546e7a" stroke-width="1.5"/><line x1="28" y1="28" x2="28" y2="34" stroke="#546e7a" stroke-width="1.5"/></svg>',
+  rodo:'<svg viewBox="0 0 40 40"><line x1="20" y1="4" x2="20" y2="28" stroke="#8d6e63" stroke-width="2.5"/><rect x="6" y="28" width="28" height="6" rx="3" fill="#78909c"/></svg>',
   saco_lixo:'<svg viewBox="0 0 40 40"><path d="M14 10 Q10 12 10 20 L12 36 H28 L30 20 Q30 12 26 10 Z" fill="#c8e6c9"/><path d="M14 10 Q20 6 26 10" fill="none" stroke="#66bb6a" stroke-width="2"/></svg>',
-  sabao:'<svg viewBox="0 0 40 40"><rect x="10" y="14" width="20" height="18" rx="4" fill="#fff9c4"/><ellipse cx="20" cy="14" rx="8" ry="4" fill="#fff176"/><circle cx="16" cy="22" r="2" fill="white" opacity=".7"/><circle cx="22" cy="26" r="3" fill="white" opacity=".5"/></svg>',
-  sapolia:'<svg viewBox="0 0 40 40"><ellipse cx="20" cy="24" rx="12" ry="8" fill="#b39ddb"/><rect x="16" y="14" width="8" height="12" rx="2" fill="#ce93d8"/><ellipse cx="20" cy="14" rx="4" ry="2.5" fill="#e1bee7"/></svg>',
-  vassoura:'<svg viewBox="0 0 40 40"><line x1="20" y1="4" x2="20" y2="26" stroke="#8d6e63" stroke-width="2.5"/><path d="M8 26 L32 26 L30 36 L10 36 Z" fill="#bcaaa4"/><line x1="12" y1="26" x2="11" y2="36" stroke="#8d6e63" stroke-width="1"/><line x1="17" y1="26" x2="16" y2="36" stroke="#8d6e63" stroke-width="1"/><line x1="22" y1="26" x2="22" y2="36" stroke="#8d6e63" stroke-width="1"/><line x1="27" y1="26" x2="28" y2="36" stroke="#8d6e63" stroke-width="1"/></svg>',
-  lustra_moveis:'<svg viewBox="0 0 40 40"><rect x="13" y="6" width="14" height="28" rx="5" fill="#ffe0b2"/><rect x="15" y="6" width="10" height="4" rx="2" fill="#ffb74d"/><circle cx="20" cy="22" r="4" fill="#ff9800" opacity=".4"/></svg>',
+  sabao:'<svg viewBox="0 0 40 40"><rect x="10" y="14" width="20" height="18" rx="4" fill="#fff9c4"/><ellipse cx="20" cy="14" rx="8" ry="4" fill="#fff176"/></svg>',
+  sapolia:'<svg viewBox="0 0 40 40"><ellipse cx="20" cy="24" rx="12" ry="8" fill="#b39ddb"/><rect x="16" y="14" width="8" height="12" rx="2" fill="#ce93d8"/></svg>',
+  vassoura:'<svg viewBox="0 0 40 40"><line x1="20" y1="4" x2="20" y2="26" stroke="#8d6e63" stroke-width="2.5"/><path d="M8 26 L32 26 L30 36 L10 36 Z" fill="#bcaaa4"/></svg>',
+  lustra_moveis:'<svg viewBox="0 0 40 40"><rect x="13" y="6" width="14" height="28" rx="5" fill="#ffe0b2"/><rect x="15" y="6" width="10" height="4" rx="2" fill="#ffb74d"/></svg>',
   dispenser:'<svg viewBox="0 0 40 40"><rect x="10" y="8" width="20" height="26" rx="4" fill="#f5f5f5"/><rect x="14" y="8" width="12" height="6" rx="2" fill="#e0e0e0"/><rect x="17" y="30" width="6" height="4" rx="2" fill="#bdbdbd"/></svg>',
-  escova:'<svg viewBox="0 0 40 40"><rect x="16" y="6" width="8" height="20" rx="3" fill="#b0bec5"/><rect x="12" y="26" width="16" height="8" rx="3" fill="#78909c"/><line x1="14" y1="26" x2="14" y2="34" stroke="#546e7a" stroke-width="1.5"/><line x1="18" y1="26" x2="18" y2="34" stroke="#546e7a" stroke-width="1.5"/><line x1="22" y1="26" x2="22" y2="34" stroke="#546e7a" stroke-width="1.5"/><line x1="26" y1="26" x2="26" y2="34" stroke="#546e7a" stroke-width="1.5"/></svg>'
+  escova:'<svg viewBox="0 0 40 40"><rect x="16" y="6" width="8" height="20" rx="3" fill="#b0bec5"/><rect x="12" y="26" width="16" height="8" rx="3" fill="#78909c"/></svg>',
+  // EQUIPAMENTOS
+  carrinho:'<svg viewBox="0 0 40 40"><rect x="6" y="10" width="20" height="22" rx="3" fill="#b0bec5"/><rect x="24" y="14" width="10" height="14" rx="2" fill="#cfd8dc"/><circle cx="10" cy="34" r="3" fill="#546e7a"/><circle cx="22" cy="34" r="3" fill="#546e7a"/><line x1="4" y1="10" x2="4" y2="32" stroke="#78909c" stroke-width="2.5"/></svg>',
+  balde_espremedor:'<svg viewBox="0 0 40 40"><path d="M8 14 L10 34 H30 L32 14 Z" fill="#fff9c4"/><rect x="14" y="8" width="12" height="8" rx="2" fill="#f9a825"/><path d="M8 14 Q20 8 32 14" fill="none" stroke="#bdbdbd" stroke-width="2.5"/><circle cx="14" cy="38" r="2.5" fill="#8d6e63"/><circle cx="26" cy="38" r="2.5" fill="#8d6e63"/></svg>',
+  carro_lixo:'<svg viewBox="0 0 40 40"><rect x="8" y="10" width="24" height="22" rx="3" fill="#80cbc4"/><rect x="12" y="6" width="16" height="6" rx="2" fill="#4db6ac"/><circle cx="12" cy="34" r="3" fill="#546e7a"/><circle cx="28" cy="34" r="3" fill="#546e7a"/></svg>',
+  placa_molhado:'<svg viewBox="0 0 40 40"><path d="M20 4 L36 34 H4 Z" fill="#fff176"/><rect x="18" y="14" width="4" height="12" rx="1" fill="#f57f17"/><rect x="18" y="28" width="4" height="4" rx="1" fill="#f57f17"/></svg>',
+  placa_banheiro:'<svg viewBox="0 0 40 40"><rect x="6" y="6" width="28" height="28" rx="4" fill="#e3f2fd"/><text x="20" y="24" text-anchor="middle" font-size="18" fill="#1565c0">🚻</text></svg>',
+  cabo_rodo:'<svg viewBox="0 0 40 40"><line x1="20" y1="2" x2="20" y2="38" stroke="#8d6e63" stroke-width="3.5"/><rect x="10" y="34" width="20" height="4" rx="2" fill="#78909c"/></svg>',
+  escada:'<svg viewBox="0 0 40 40"><line x1="8" y1="4" x2="8" y2="36" stroke="#8d6e63" stroke-width="3"/><line x1="32" y1="4" x2="32" y2="36" stroke="#8d6e63" stroke-width="3"/><line x1="8" y1="12" x2="32" y2="12" stroke="#a1887f" stroke-width="2"/><line x1="8" y1="20" x2="32" y2="20" stroke="#a1887f" stroke-width="2"/><line x1="8" y1="28" x2="32" y2="28" stroke="#a1887f" stroke-width="2"/></svg>',
+  aspirador:'<svg viewBox="0 0 40 40"><ellipse cx="20" cy="22" rx="14" ry="10" fill="#b0bec5"/><rect x="17" y="6" width="6" height="16" rx="3" fill="#78909c"/><circle cx="20" cy="22" r="5" fill="#546e7a"/></svg>',
+  cavalete:'<svg viewBox="0 0 40 40"><path d="M20 8 L6 34" stroke="#ffa726" stroke-width="3"/><path d="M20 8 L34 34" stroke="#ffa726" stroke-width="3"/><line x1="10" y1="26" x2="30" y2="26" stroke="#ffa726" stroke-width="2"/><text x="20" y="22" text-anchor="middle" font-size="9" fill="#e65100">⚠</text></svg>'
 };
-const ICON_NOMES={alcool:'Álcool 70%',balde:'Balde',desinfetante:'Desinfetante',detergente:'Detergente',esponja:'Esponja',fibra:'Fibra',hipoclorito:'Hipoclorito',limpa_vidros:'Limpa Vidros',mop:'Mop/Refil',pa_lixo:'Pá de Lixo',pano_chao:'Pano de Chão',pulverizador:'Pulverizador',rodo:'Rodo',saco_lixo:'Saco de Lixo',sabao:'Sabão',sapolia:'Sapolio',vassoura:'Vassoura',lustra_moveis:'Lustra Móveis',dispenser:'Dispenser',escova:'Escova Sanitária'};
+
+const ICON_NOMES={
+  alcool:'Álcool 70%',balde:'Balde',desinfetante:'Desinfetante',detergente:'Detergente',
+  esponja:'Esponja',fibra:'Fibra',hipoclorito:'Hipoclorito',limpa_vidros:'Limpa Vidros',
+  mop:'Mop/Refil',pa_lixo:'Pá de Lixo',pano_chao:'Pano de Chão',pulverizador:'Pulverizador',
+  rodo:'Rodo',saco_lixo:'Saco de Lixo',sabao:'Sabão',sapolia:'Sapolio',vassoura:'Vassoura',
+  lustra_moveis:'Lustra Móveis',dispenser:'Dispenser',escova:'Escova',
+  carrinho:'Carrinho Limpr.',balde_espremedor:'Balde+Esprem.',carro_lixo:'Carro de Lixo',
+  placa_molhado:'Placa Piso Mol.',placa_banheiro:'Placa Banheiro',cabo_rodo:'Cabo p/ Rodo',
+  escada:'Escada',aspirador:'Aspirador',cavalete:'Cavalete'
+};
+
 const MATERIAIS_PADRAO=[
   {nome:'Álcool Líquido 70%',qtd:2,un:'Pote 500g',icone:'alcool',foto:''},
   {nome:'Desinfetante',qtd:3,un:'BB',icone:'desinfetante',foto:''},
@@ -2768,24 +2812,44 @@ const MATERIAIS_PADRAO=[
   {nome:'Lustra Móveis',qtd:4,un:'200ml',icone:'lustra_moveis',foto:''},
   {nome:'Sabão Pastoso',qtd:1,un:'Pote 500g',icone:'sabao',foto:''},
   {nome:'Sapolio Cremoso',qtd:3,un:'500ml',icone:'sapolia',foto:''},
-  {nome:'Balde Plástico',qtd:4,un:'un',icone:'balde',foto:''},
   {nome:'Dispenser Papel Toalha',qtd:1,un:'un',icone:'dispenser',foto:''},
-  {nome:'Escova Sanitária',qtd:2,un:'un',icone:'escova',foto:''},
   {nome:'Esponja',qtd:6,un:'un',icone:'esponja',foto:''},
   {nome:'Fibra Preta',qtd:6,un:'un',icone:'fibra',foto:''},
   {nome:'Fibra Verde',qtd:5,un:'un',icone:'fibra',foto:''},
-  {nome:'Mop Úmido / Refil',qtd:1,un:'un',icone:'mop',foto:''},
   {nome:'Pano de Chão',qtd:10,un:'un',icone:'pano_chao',foto:''},
-  {nome:'Pá de Lixo c/ Cabo',qtd:2,un:'un',icone:'pa_lixo',foto:''},
-  {nome:'Pulverizador',qtd:10,un:'un',icone:'pulverizador',foto:''},
-  {nome:'Rodo 60cm c/ Cabo',qtd:2,un:'un',icone:'rodo',foto:''},
-  {nome:'Vassoura de Nylon',qtd:2,un:'un',icone:'vassoura',foto:''},
-  {nome:'Vassoura de Piaçava',qtd:2,un:'un',icone:'vassoura',foto:''},
+  {nome:'Pulverizador',qtd:4,un:'un',icone:'pulverizador',foto:''},
+  {nome:'Refil Mop Úmido',qtd:2,un:'un',icone:'mop',foto:''},
   {nome:'Saco de Lixo 60L',qtd:2,un:'Pct c/100',icone:'saco_lixo',foto:''},
   {nome:'Saco de Lixo 100L',qtd:2,un:'Pct c/100',icone:'saco_lixo',foto:''},
 ];
+
+const EQUIPAMENTOS_PADRAO=[
+  {nome:'Carrinho de Limpeza',qtd:1,un:'un',icone:'carrinho',foto:''},
+  {nome:'Balde c/ Espremedor de Mop',qtd:2,un:'un',icone:'balde_espremedor',foto:''},
+  {nome:'Carro Coletor de Lixo',qtd:1,un:'un',icone:'carro_lixo',foto:''},
+  {nome:'Vassoura de Piaçava c/ Cabo',qtd:2,un:'un',icone:'vassoura',foto:''},
+  {nome:'Vassoura de Nylon c/ Cabo',qtd:2,un:'un',icone:'vassoura',foto:''},
+  {nome:'Rodo 60cm c/ Cabo',qtd:2,un:'un',icone:'rodo',foto:''},
+  {nome:'Mop Úmido c/ Cabo',qtd:1,un:'un',icone:'mop',foto:''},
+  {nome:'Pá de Lixo c/ Cabo',qtd:2,un:'un',icone:'pa_lixo',foto:''},
+  {nome:'Placa "Piso Molhado"',qtd:2,un:'un',icone:'placa_molhado',foto:''},
+  {nome:'Placa "Banheiro em Limpeza"',qtd:2,un:'un',icone:'placa_banheiro',foto:''},
+  {nome:'Cavalete de Sinalização',qtd:2,un:'un',icone:'cavalete',foto:''},
+  {nome:'Escova Sanitária c/ Suporte',qtd:2,un:'un',icone:'escova',foto:''},
+];
 let _materiais=[]; // lista em edição no modal
+let _equipamentos=[]; // equipamentos em edição
 let _matIconeIdx=null; // qual item está sendo editado no picker
+let _pickerTarget='mat'; // 'mat' ou 'equip'
+
+function switchTab(tab){
+  document.getElementById('tab-mat-content').style.display=tab==='mat'?'':'none';
+  document.getElementById('tab-equip-content').style.display=tab==='equip'?'':'none';
+  document.getElementById('tab-mat-btn').className='btn btn-sm '+(tab==='mat'?'btn-primary':'btn-ghost')+' ';
+  document.getElementById('tab-equip-btn').className='btn btn-sm '+(tab==='equip'?'btn-primary':'btn-ghost')+' ';
+  document.getElementById('tab-mat-btn').style.borderRadius='6px 6px 0 0';
+  document.getElementById('tab-equip-btn').style.borderRadius='6px 6px 0 0';
+}
 
 function toggleMateriaisUI(){
   const mjl=document.getElementById('mpr-mat').value==='mjl';
@@ -2800,45 +2864,59 @@ function toggleMateriaisUI(){
 function renderMateriaisProp(){
   const el=document.getElementById('mpr-mat-lista');if(!el)return;
   if(!_materiais.length){el.innerHTML='<p style="color:var(--text3);font-size:12px;">Nenhum item. Clique em "+ Item" ou "↺ Padrão".</p>';return;}
-  el.innerHTML=_materiais.map((m,i)=>`<div style="display:grid;grid-template-columns:auto 1fr 60px 90px auto auto;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
-    <div style="width:34px;height:34px;border-radius:6px;background:var(--bg);overflow:hidden;cursor:pointer;" onclick="abrirIconePicker(${i})" title="Alterar foto/ícone">
+  el.innerHTML=_materiais.map((m,i)=>_renderItemLinha(m,i,'mat')).join('');
+}
+
+function renderEquipamentosProp(){
+  const el=document.getElementById('mpr-equip-lista');if(!el)return;
+  if(!_equipamentos.length){el.innerHTML='<p style="color:var(--text3);font-size:12px;">Nenhum equipamento. Clique em "+ Item" ou "↺ Padrão".</p>';return;}
+  el.innerHTML=_equipamentos.map((m,i)=>_renderItemLinha(m,i,'equip')).join('');
+}
+
+function _renderItemLinha(m,i,target){
+  return`<div style="display:grid;grid-template-columns:auto 1fr 60px 90px auto auto;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+    <div style="width:34px;height:34px;border-radius:6px;background:var(--bg);overflow:hidden;cursor:pointer;" onclick="abrirIconePicker(${i},'${target}')" title="Alterar foto/ícone">
       ${m.foto?`<img src="${m.foto}" style="width:100%;height:100%;object-fit:cover;">`:`<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">${MATERIAIS_ICONS[m.icone]||MATERIAIS_ICONS.esponja}</svg>`}
     </div>
-    <input value="${m.nome}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;" oninput="_materiais[${i}].nome=this.value">
-    <input type="number" value="${m.qtd}" min="0" step="0.5" style="padding:5px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;text-align:center;" oninput="_materiais[${i}].qtd=Number(this.value)||0">
-    <input value="${m.un}" style="padding:5px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;" placeholder="un, BB, pct..." oninput="_materiais[${i}].un=this.value">
-    <button class="btn btn-ghost btn-sm" onclick="abrirIconePicker(${i})" title="Foto / Ícone">📷</button>
-    <button class="btn btn-danger btn-sm" onclick="_materiais.splice(${i},1);renderMateriaisProp()">×</button>
-  </div>`).join('');
+    <input value="${m.nome}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;" oninput="${target==='mat'?'_materiais':'_equipamentos'}[${i}].nome=this.value">
+    <input type="number" value="${m.qtd}" min="0" step="0.5" style="padding:5px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;text-align:center;" oninput="${target==='mat'?'_materiais':'_equipamentos'}[${i}].qtd=Number(this.value)||0">
+    <input value="${m.un}" style="padding:5px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;" placeholder="un, BB, pct..." oninput="${target==='mat'?'_materiais':'_equipamentos'}[${i}].un=this.value">
+    <button class="btn btn-ghost btn-sm" onclick="abrirIconePicker(${i},'${target}')" title="Foto / Ícone">📷</button>
+    <button class="btn btn-danger btn-sm" onclick="${target==='mat'?'_materiais':'_equipamentos'}.splice(${i},1);${target==='mat'?'renderMateriaisProp':'renderEquipamentosProp'}()">×</button>
+  </div>`;
 }
 
 function addMaterialProp(){_materiais.push({nome:'',qtd:1,un:'un',icone:'esponja',foto:''});renderMateriaisProp();}
+function addEquipamentoProp(){_equipamentos.push({nome:'',qtd:1,un:'un',icone:'carrinho',foto:''});renderEquipamentosProp();}
 
 function restaurarMateriaisPadrao(){
-  if(_materiais.length&&!confirm('Substituir a lista atual pela lista padrão?'))return;
-  _materiais=MATERIAIS_PADRAO.map(m=>({...m}));
-  renderMateriaisProp();
+  if(_materiais.length&&!confirm('Substituir a lista atual pela lista padrão de materiais?'))return;
+  _materiais=MATERIAIS_PADRAO.map(m=>({...m}));renderMateriaisProp();
+}
+function restaurarEquipamentosPadrao(){
+  if(_equipamentos.length&&!confirm('Substituir a lista atual pela lista padrão de equipamentos?'))return;
+  _equipamentos=EQUIPAMENTOS_PADRAO.map(m=>({...m}));renderEquipamentosProp();
 }
 
-function abrirIconePicker(i){
-  _matIconeIdx=i;
+function abrirIconePicker(i,target){
+  _matIconeIdx=i;_pickerTarget=target||'mat';
   const picker=document.getElementById('mpr-icone-picker');
   picker.classList.remove('hidden');
+  const lista=_pickerTarget==='mat'?_materiais:_equipamentos;
   const grid=document.getElementById('mpr-icone-grid');
-  grid.innerHTML=Object.entries(MATERIAIS_ICONS).map(([k,svg])=>`<div style="cursor:pointer;border:2px solid ${(_materiais[i]?.icone===k)?'var(--brand)':'transparent'};border-radius:6px;padding:2px;text-align:center;" onclick="selecionarIcone('${k}')" title="${ICON_NOMES[k]||k}">
+  grid.innerHTML=Object.entries(MATERIAIS_ICONS).map(([k,svg])=>`<div style="cursor:pointer;border:2px solid ${(lista[i]?.icone===k)?'var(--brand)':'transparent'};border-radius:6px;padding:2px;text-align:center;" onclick="selecionarIcone('${k}')" title="${ICON_NOMES[k]||k}">
     <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="width:40px;height:40px;">${svg}</svg>
     <div style="font-size:9px;color:var(--text3);margin-top:2px;">${ICON_NOMES[k]||k}</div>
   </div>`).join('');
-  // Posiciona perto do botão clicado (aproximado)
   picker.style.top='50%';picker.style.left='50%';picker.style.transform='translate(-50%,-50%)';
 }
 
 function selecionarIcone(k){
   if(_matIconeIdx===null)return;
-  _materiais[_matIconeIdx].icone=k;
-  _materiais[_matIconeIdx].foto=''; // limpa foto se tinha upload
+  const lista=_pickerTarget==='mat'?_materiais:_equipamentos;
+  lista[_matIconeIdx].icone=k;lista[_matIconeIdx].foto='';
   document.getElementById('mpr-icone-picker').classList.add('hidden');
-  renderMateriaisProp();
+  _pickerTarget==='mat'?renderMateriaisProp():renderEquipamentosProp();
   _matIconeIdx=null;
 }
 
@@ -2849,26 +2927,26 @@ function handleFotoUpload(){
   reader.onload=function(e){
     const img=new Image();
     img.onload=function(){
-      // Redimensiona para máx 120px (mantém proporção) para não inflar o JSON
       const canvas=document.createElement('canvas');
       const max=120;const scale=Math.min(max/img.width,max/img.height,1);
       canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
       canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-      _materiais[_matIconeIdx].foto=canvas.toDataURL('image/jpeg',0.75);
-      _materiais[_matIconeIdx].icone='';
+      const lista=_pickerTarget==='mat'?_materiais:_equipamentos;
+      lista[_matIconeIdx].foto=canvas.toDataURL('image/jpeg',0.75);
+      lista[_matIconeIdx].icone='';
       document.getElementById('mpr-icone-picker').classList.add('hidden');
-      renderMateriaisProp();
+      _pickerTarget==='mat'?renderMateriaisProp():renderEquipamentosProp();
       inp.value='';_matIconeIdx=null;
     };img.src=e.target.result;
   };reader.readAsDataURL(inp.files[0]);
 }
 
-// Inicializa grade de ícones ao abrir modal
-function initIconeGrid(){
-  const grid=document.getElementById('mpr-icone-grid');
-  if(grid&&!grid.innerHTML)grid.innerHTML=Object.entries(MATERIAIS_ICONS).map(([k,svg])=>`<div style="cursor:pointer;border-radius:6px;padding:2px;text-align:center;" onclick="selecionarIcone('${k}')" title="${ICON_NOMES[k]||k}"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="width:40px;height:40px;">${svg}</svg><div style="font-size:9px;color:var(--text3);margin-top:2px;">${ICON_NOMES[k]||k}</div></div>`).join('');
+function toggleMateriaisUI(){
+  const mjl=document.getElementById('mpr-mat').value==='mjl';
+  const sec=document.getElementById('mpr-mat-section');
+  ['mpr-b-mat-label','mpr-b-equip-label','mpr-b-demo-label'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=mjl?'':'none';});
+  if(sec)sec.style.display=mjl?'block':'none';
 }
-// ================================================================
 
 const PROP_PADRAO={
   sobre:`A MJL Serviços e Soluções é a sua parceira estratégica para transformar a gestão de serviços de limpeza e conservação. Com um compromisso inabalável com a qualidade, eficiência e confiabilidade, oferecemos soluções completas em terceirização que garantem um ambiente impecável, higienizado e acolhedor.\n\nNossa proposta vai além da simples prestação de serviços: ela engloba um planejamento meticuloso e uma execução impecável, liberando sua administração para focar no que realmente importa — o bem-estar e a valorização do seu patrimônio.`,
@@ -2981,8 +3059,10 @@ function abrirModalProposta(id){
     ['sobre','resp','resumo','comp'].forEach(b=>{document.getElementById('mpr-b-'+b).checked=(p.blocos||{})[b]!==false&&!(b==='comp'&&!(p.blocos||{}).comp);});
     document.getElementById('mpr-b-comp').checked=!!(p.blocos||{}).comp;
     document.getElementById('mpr-b-mat').checked=!!(p.blocos||{}).mat;
+    document.getElementById('mpr-b-equip').checked=!!(p.blocos||{}).equip;
     document.getElementById('mpr-b-demo').checked=!!(p.blocos||{}).demo;
     _materiais=(p.materiais&&p.materiais.length)?p.materiais.map(m=>({...m})):MATERIAIS_PADRAO.map(m=>({...m}));
+    _equipamentos=(p.equipamentos&&p.equipamentos.length)?p.equipamentos.map(m=>({...m})):EQUIPAMENTOS_PADRAO.map(m=>({...m}));
     document.getElementById('mpr-t-sobre').value=p.tSobre||PROP_PADRAO.sobre;
     document.getElementById('mpr-t-porque').value=p.tPorque||PROP_PADRAO.porque;
     document.getElementById('mpr-t-respcli').value=p.tRespCli||PROP_PADRAO.respcli;
@@ -3000,8 +3080,9 @@ function abrirModalProposta(id){
     document.getElementById('mpr-mat').value='mjl';document.getElementById('mpr-st').value='rascunho';
     document.getElementById('mpr-b-sobre').checked=true;document.getElementById('mpr-b-resp').checked=true;
     document.getElementById('mpr-b-resumo').checked=true;document.getElementById('mpr-b-comp').checked=false;
-    document.getElementById('mpr-b-mat').checked=true;document.getElementById('mpr-b-demo').checked=false;
+    document.getElementById('mpr-b-mat').checked=true;document.getElementById('mpr-b-equip').checked=true;document.getElementById('mpr-b-demo').checked=false;
     _materiais=MATERIAIS_PADRAO.map(m=>({...m}));
+    _equipamentos=EQUIPAMENTOS_PADRAO.map(m=>({...m}));
     document.getElementById('mpr-t-sobre').value=PROP_PADRAO.sobre;
     document.getElementById('mpr-t-porque').value=PROP_PADRAO.porque;
     document.getElementById('mpr-t-respcli').value=PROP_PADRAO.respcli;
@@ -3011,7 +3092,7 @@ function abrirModalProposta(id){
     document.getElementById('mpr-t-pag').value=PROP_PADRAO.pag;
     _postosProp=[{funcao:'',escala:'',qtd:1,val:0}];
   }
-  renderPostosProp();toggleMateriaisUI();renderMateriaisProp();abrirModal('modal-prop');
+  renderPostosProp();toggleMateriaisUI();renderMateriaisProp();renderEquipamentosProp();switchTab('mat');abrirModal('modal-prop');
 }
 function salvarProposta(imprimir){
   const id=document.getElementById('mpr-id').value;
@@ -3029,8 +3110,8 @@ function salvarProposta(imprimir){
     data:document.getElementById('mpr-data').value,validade:document.getElementById('mpr-val').value,
     mat:document.getElementById('mpr-mat').value,st:document.getElementById('mpr-st').value,
     postos,total:postos.reduce((s,p)=>s+p.qtd*p.val,0),
-    blocos:{sobre:document.getElementById('mpr-b-sobre').checked,resp:document.getElementById('mpr-b-resp').checked,resumo:document.getElementById('mpr-b-resumo').checked,comp:document.getElementById('mpr-b-comp').checked,mat:document.getElementById('mpr-b-mat').checked,demo:document.getElementById('mpr-b-demo').checked},
-    materiais:[..._materiais],
+    blocos:{sobre:document.getElementById('mpr-b-sobre').checked,resp:document.getElementById('mpr-b-resp').checked,resumo:document.getElementById('mpr-b-resumo').checked,comp:document.getElementById('mpr-b-comp').checked,mat:document.getElementById('mpr-b-mat').checked,equip:document.getElementById('mpr-b-equip').checked,demo:document.getElementById('mpr-b-demo').checked},
+    materiais:[..._materiais],equipamentos:[..._equipamentos],
     tSobre:document.getElementById('mpr-t-sobre').value,tPorque:document.getElementById('mpr-t-porque').value,
     tRespCli:document.getElementById('mpr-t-respcli').value,tRespMjl:document.getElementById('mpr-t-respmjl').value,
     tResumo:document.getElementById('mpr-t-resumo').value,tComp:document.getElementById('mpr-t-comp').value,tPag:document.getElementById('mpr-t-pag').value};
@@ -3175,11 +3256,11 @@ function imprimirProposta(p){
   </div></div>
 
   ${(B.mat&&p.materiais&&p.materiais.length)?`
-  <!-- ANEXO I: Lista de Materiais -->
+  <!-- ANEXO I: Materiais de Limpeza -->
   <div class="pg"><div class="pad">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
       <div style="background:${AZUL};color:#fff;padding:4px 12px;border-radius:16px;font-size:11px;font-weight:800;">ANEXO I</div>
-      <div><h2 style="font-size:24px;">Materiais de</h2><div class="h2b" style="font-size:20px;">Limpeza Inclusos</div></div>
+      <div><h2 style="font-size:24px;">Materiais de</h2><div class="h2b" style="font-size:20px;">Limpeza — Uso Mensal</div></div>
     </div>
     <div style="border-top:3px solid ${AZULC};margin-bottom:14px;"></div>
     <table>
@@ -3192,16 +3273,34 @@ function imprimirProposta(p){
     <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
   </div></div>`:''}
 
-  ${(B.demo&&p.materiais&&p.materiais.some(m=>m.foto||m.icone))?
-    (()=>{
-      const itensFoto=p.materiais.filter(m=>m.foto||m.icone);
+  ${(B.equip&&p.equipamentos&&p.equipamentos.length)?`
+  <!-- ANEXO II: Equipamentos -->
+  <div class="pg"><div class="pad">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div style="background:${AZULC};color:${AZUL};padding:4px 12px;border-radius:16px;font-size:11px;font-weight:800;border:2px solid ${AZUL};">ANEXO ${B.mat?'II':'I'}</div>
+      <div><h2 style="font-size:24px;">Equipamentos</h2><div class="h2b" style="font-size:20px;">Utilizados no Local</div></div>
+    </div>
+    <div style="border-top:3px solid ${AZULC};margin-bottom:14px;"></div>
+    <table>
+      <thead><tr><th style="width:50%;">Equipamento</th><th style="width:20%;text-align:center;">Quantidade</th><th style="width:30%;">Unidade</th></tr></thead>
+      <tbody>
+        ${p.equipamentos.map(m=>`<tr><td>${m.nome||'—'}</td><td style="text-align:center;font-weight:700;">${m.qtd||0}</td><td>${m.un||'—'}</td></tr>`).join('')}
+      </tbody>
+    </table>
+    <p style="font-size:10px;color:#888;margin-top:10px;">* Os equipamentos são de propriedade da MJL Serviços e Soluções e permanecem no local durante a vigência do contrato.</p>
+    <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
+  </div></div>`:''}
+
+  ${(B.demo&&(()=>{
+      const tudo=[...(B.mat&&p.materiais?p.materiais:[]),...(B.equip&&p.equipamentos?p.equipamentos:[])].filter(m=>m.foto||m.icone);
+      if(!tudo.length)return'';
       const POR_PG=6;const pags=[];
-      for(let i=0;i<itensFoto.length;i+=POR_PG)pags.push(itensFoto.slice(i,i+POR_PG));
-      const numAnexo=B.mat?'II':'I';
+      for(let i=0;i<tudo.length;i+=POR_PG)pags.push(tudo.slice(i,i+POR_PG));
+      const numAnexo=(B.mat&&B.equip)?'III':(B.mat||B.equip)?'II':'I';
       return pags.map((pg,pi)=>`<div class="pg"><div class="pad">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
           <div style="background:${AZUL};color:#fff;padding:4px 12px;border-radius:16px;font-size:11px;font-weight:800;">ANEXO ${numAnexo}</div>
-          <div><h2 style="font-size:22px;">Demonstrativo</h2><div class="h2b" style="font-size:18px;">de Materiais${pags.length>1?' — Pág.'+(pi+1):''}${pags.length>1?' de '+pags.length:''}</div></div>
+          <div><h2 style="font-size:22px;">Demonstrativo</h2><div class="h2b" style="font-size:18px;">Visual${pags.length>1?' — '+(pi+1)+'/'+pags.length:''}</div></div>
         </div>
         <div style="border-top:3px solid ${AZULC};margin-bottom:16px;"></div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
@@ -3217,7 +3316,7 @@ function imprimirProposta(p){
         <p style="font-size:9px;color:#aaa;margin-top:16px;text-align:center;">* As imagens são meramente ilustrativas.</p>
         <div class="rodape">MJL Serviços e Soluções — CNPJ 46.636.732/0001-73 — (21) 9 6838-1313 — contato@mjlservicosesolucoes.com.br</div>
       </div></div>`).join('');
-    })():''}
+    })())||''}
   <script>window.onload=function(){window.print();};</scr`+`ipt></body></html>`;
   const w=window.open('','_blank');w.document.write(html);w.document.close();
 }

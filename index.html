@@ -3058,8 +3058,8 @@ function abrirModalProposta(id){
     document.getElementById('mpr-st').value=p.st||'rascunho';
     ['sobre','resp','resumo','comp'].forEach(b=>{document.getElementById('mpr-b-'+b).checked=(p.blocos||{})[b]!==false&&!(b==='comp'&&!(p.blocos||{}).comp);});
     document.getElementById('mpr-b-comp').checked=!!(p.blocos||{}).comp;
-    document.getElementById('mpr-b-mat').checked=!!(p.blocos||{}).mat;
-    document.getElementById('mpr-b-equip').checked=!!(p.blocos||{}).equip;
+    document.getElementById('mpr-b-mat').checked=(p.blocos||{}).mat!==false; // padrão true
+    document.getElementById('mpr-b-equip').checked=(p.blocos||{}).equip!==false; // padrão true
     document.getElementById('mpr-b-demo').checked=!!(p.blocos||{}).demo;
     _materiais=(p.materiais&&p.materiais.length)?p.materiais.map(m=>({...m})):MATERIAIS_PADRAO.map(m=>({...m}));
     _equipamentos=(p.equipamentos&&p.equipamentos.length)?p.equipamentos.map(m=>({...m})):EQUIPAMENTOS_PADRAO.map(m=>({...m}));
@@ -3147,7 +3147,12 @@ function imprimirProposta(p){
   const bullets=t=>linhas(t).map(x=>`<li>${x}</li>`).join('');
   const tot=p.postos.reduce((s,x)=>s+x.qtd*x.val,0);
   const matTxt=p.mat==='mjl'?'Os materiais de limpeza serão fornecidos pela MJL (já inclusos no valor), assim como os EPIs e uniformes dos colaboradores.':'Os materiais e equipamentos de limpeza serão fornecidos pelo Condomínio/Cliente. A MJL fornece os uniformes e EPIs de uso pessoal dos seus colaboradores.';
-  const B=p.blocos||{};
+  const bBrutos=p.blocos||{};
+  // Normaliza blocos: mat e equip são true por padrão pra propostas criadas antes desse campo existir
+  const B={...bBrutos,mat:bBrutos.mat!==false,equip:bBrutos.equip!==false};
+  // Se não tiver listas salvas (proposta antiga), usa os padrões
+  if(!p.materiais||!p.materiais.length)p.materiais=MATERIAIS_PADRAO.map(m=>({...m}));
+  if(!p.equipamentos||!p.equipamentos.length)p.equipamentos=EQUIPAMENTOS_PADRAO.map(m=>({...m}));
   const AZUL='#1f7fd1', AZULC='#9fcdf0', CINZA='#f0f2f5';
   const maosSVG=`<svg viewBox="0 0 300 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
     <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b6cb0"/><stop offset="1" stop-color="#63a4d8"/></linearGradient></defs>

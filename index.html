@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v19</title>
+<title>MJL ERP Financeiro v20</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1067,7 +1067,11 @@ function enviarParaSheets(){
         servicos:ERP.servicos,categorias:ERP.categorias,
         receber:ERP.receber,pagar:ERP.pagar,impostos:ERP.impostos,
         vendas:ERP.vendas,contas:ERP.contas,movimentos:ERP.movimentos,
-        recibos:ERP.recibos,config:ERP.config
+                recibos:ERP.recibos,
+        propostas:ERP.propostas,produtos:ERP.produtos,
+        estoqueMov:ERP.estoqueMov,folhas:ERP.folhas,
+        certidoes:ERP.certidoes,planilhasCusto:ERP.planilhasCusto,
+        config:ERP.config
       }};
       return fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
         .then(function(){

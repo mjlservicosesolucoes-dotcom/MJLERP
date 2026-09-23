@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v20</title>
+<title>MJL ERP Financeiro v21</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -2949,6 +2949,7 @@ function toggleMateriaisUI(){
   const mjl=document.getElementById('mpr-mat').value==='mjl';
   const sec=document.getElementById('mpr-mat-section');
   ['mpr-b-mat-label','mpr-b-equip-label','mpr-b-demo-label'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=mjl?'':'none';});
+      if(!mjl){['mpr-b-mat','mpr-b-equip','mpr-b-demo'].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});}
   if(sec)sec.style.display=mjl?'block':'none';
 }
 
@@ -3154,6 +3155,7 @@ function imprimirProposta(p){
   const bBrutos=p.blocos||{};
   // Normaliza blocos: mat e equip são true por padrão pra propostas criadas antes desse campo existir
   const B={...bBrutos,mat:bBrutos.mat!==false,equip:bBrutos.equip!==false};
+    if(p.mat!=='mjl'){B.mat=false;B.equip=false;B.demo=false;}
   // Se não tiver listas salvas (proposta antiga), usa os padrões
   if(!p.materiais||!p.materiais.length)p.materiais=MATERIAIS_PADRAO.map(m=>({...m}));
   if(!p.equipamentos||!p.equipamentos.length)p.equipamentos=EQUIPAMENTOS_PADRAO.map(m=>({...m}));

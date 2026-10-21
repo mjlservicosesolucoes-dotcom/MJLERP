@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v29</title>
+<title>MJL ERP Financeiro v30</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1488,6 +1488,18 @@ function _detalheRateioPorCliente(cliId,per){
         const selo=c.nome+' ~'+(per.multi?' '+_mesLabelCurto(comp):'');
         _rateiosDoColab(c).forEach(r=>{
           if((r.ccId||'')!==(cliId||'')||!(Number(r.pct||0)>0)) return;
+          // v30: a ESTIMATIVA nao projeta ninguem num contrato antes do
+          // contrato comecar. O cadastro diz onde a pessoa trabalha HOJE;
+          // usado para tras, ele inventava custo. O Living Choice comecou
+          // em 02/10 e junho (que nao tem folha fechada, entao cai na
+          // estimativa) mostrava os 8 colaboradores dele: R$ 11.100,28 de
+          // prejuizo na Portaria e R$ 11.382,36 no ASG, de gente que nem
+          // estava nesse contrato.
+          // Na folha FECHADA isto nao se aplica: la o rateio e historico,
+          // e se algo estiver fora do lugar e erro de verdade, tem que
+          // aparecer para ser corrigido.
+          const cliR=ERP.clientes.find(x=>x.id===(r.ccId||''));
+          if(cliR&&cliR.inicio&&comp<String(cliR.inicio).slice(0,7)) return;
           const f=Number(r.pct)/100;
           if(remC>0)  linhas.push({nome:selo,parcela:'proventos estimados',pct:Number(r.pct),val:remC*f});
           if(!temFgtsReal && fgtsC>0) linhas.push({nome:selo,parcela:'FGTS estimado',pct:Number(r.pct),val:fgtsC*f});

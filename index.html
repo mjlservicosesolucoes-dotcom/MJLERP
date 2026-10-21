@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v23</title>
+<title>MJL ERP Financeiro v24</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -544,6 +544,8 @@ tr:hover td{background:#fafbff;}
     <div class="fr">
       <div class="fg"><label>Tipo *</label><select id="mco-tipo" onchange="calcCustoCol()"><option value="CLT">CLT</option><option value="RPA">RPA</option><option value="PJ">PJ</option></select></div>
       <div class="fg"><label>Função</label><select id="mco-func"><option>ASG</option><option>Porteiro</option><option>Zelador</option><option>Vigia</option><option>Recepcionista</option><option>Outro</option></select></div>
+      <div class="fg"><label>Vínculo *</label><select id="mco-vinculo"><option value="fixo">Fixo — custo todo mês</option><option value="esporadico">Esporádico — só quando trabalha</option></select>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">Esporádico (diária, cobertura) não entra na estimativa de custo do contrato. Ele só aparece no mês em que houver folha fechada ou conta a pagar no nome dele.</div></div>
     </div>
     <div class="fr"><div class="fg"><label>Salário Base (R$)</label><input type="number" id="mco-sal" step="0.01" oninput="calcCustoCol()"></div><div class="fg"><label>Hora Extra — média/mês (R$)</label><input type="number" id="mco-he" step="0.01" oninput="calcCustoCol()"></div></div>
     <div class="fr3">
@@ -1135,9 +1137,20 @@ function navegar(p){
 document.querySelectorAll('[data-page]').forEach(a=>a.addEventListener('click',()=>navegar(a.dataset.page)));
 function popularMeses(selId){
   const sel=document.getElementById(selId);if(!sel)return;
-  const h=new Date();let opts='';
-  for(let i=0;i<12;i++){const d=new Date(h.getFullYear(),h.getMonth()-i,1);const v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');opts+=`<option value="${v}">${MESES[d.getMonth()]} ${d.getFullYear()}</option>`;}
+  // v24: ate aqui a lista so ia PARA TRAS (12 meses). Nao dava para abrir
+  // novembro em outubro — e e justamente o mes que vem que se precisa
+  // olhar para precificar e para ver o efeito de quem vira CLT.
+  // Agora vai de +6 a -11, e o mes corrente continua sendo o escolhido.
+  const h=new Date(); const atual=h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0');
+  let opts='';
+  for(let i=6;i>=-11;i--){
+    const d=new Date(h.getFullYear(),h.getMonth()+i,1);
+    const v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const futuro=(v>atual)?' \u2192':'';
+    opts+=`<option value="${v}">${MESES[d.getMonth()]} ${d.getFullYear()}${futuro}</option>`;
+  }
   sel.innerHTML=opts;
+  sel.value=atual;
 }
 function getMes(){return document.getElementById('filtro-mes').value;}
 function atualizarTudo(){const p=document.querySelector('.page.active')?.id?.replace('page-','');if(p)navegar(p);}
@@ -1428,7 +1441,7 @@ function _detalheRateioPorCliente(cliId,per){
         });
       });
     } else {
-      ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
+      ERP.colaboradores.filter(c=>c.ativo!==false&&!c.esporadico).forEach(c=>{
         const remC=remCol(c)||0;
         const benefC=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
         const clt=c.tipo==='CLT';
@@ -2078,6 +2091,7 @@ function abrirModalColab(id){
   if(id){
     const c=ERP.colaboradores.find(x=>x.id===id);
     document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-he').value=c.he||'';document.getElementById('mco-adnot').value=c.adnot||'';document.getElementById('mco-insal').value=c.insal||'';document.getElementById('mco-peric').value=c.peric||'';document.getElementById('mco-outros').value=c.outros||'';document.getElementById('mco-vt').value=c.vt||'';document.getElementById('mco-vr').value=c.vr||'';document.getElementById('mco-benef').value=c.benef||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';
+    if(document.getElementById('mco-vinculo'))document.getElementById('mco-vinculo').value=c.esporadico?'esporadico':'fixo';
     if(c.rateios&&c.rateios.length)_rateiosCol=c.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
     else if(c.ccId)_rateiosCol=[{ccId:c.ccId,pct:100}];
     else _rateiosCol=[];
@@ -2085,6 +2099,7 @@ function abrirModalColab(id){
   else{
     ['mco-id','mco-nome','mco-cpf','mco-sal','mco-he','mco-adnot','mco-insal','mco-peric','mco-outros','mco-vt','mco-vr','mco-benef','mco-pix','mco-banco'].forEach(x=>document.getElementById(x).value='');
     document.getElementById('mco-tipo').value='CLT';document.getElementById('mco-func').value='ASG';
+    if(document.getElementById('mco-vinculo'))document.getElementById('mco-vinculo').value='fixo';
     _rateiosCol=[];
   }
   renderRateiosCol();calcCustoCol();abrirModal('modal-col');
@@ -2099,7 +2114,13 @@ function salvarColab(){
   const pf=tipo==='CLT'?rem*1.333/12:0,pd=tipo==='CLT'?rem/12:0,pr=tipo==='CLT'?rem*0.5/12:0,pj=tipo==='CLT'?rem*Number(ERP.config.jurPerc||5)/100:0;
   const rateios=_rateiosCol.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
   const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
-  const obj={up:Date.now(),id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,he:a.he,adnot:a.adnot,insal:a.insal,peric:a.peric,outros:a.outros,rem,vt:a.vt,vr:a.vr,benef:a.benef,fgts:tipo==='CLT'?rem*0.08:0,inss:0,custoTotal:(tipo==='CLT'?rem*1.08:rem)+a.vt+a.vr+a.benef,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:principal?principal.ccId:'',rateios,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true,up:Date.now()};
+  const obj={up:Date.now(),id:id||gid(),nome,cpf:document.getElementById('mco-cpf').value.trim(),tipo,func:document.getElementById('mco-func').value,sal,he:a.he,adnot:a.adnot,insal:a.insal,peric:a.peric,outros:a.outros,rem,vt:a.vt,vr:a.vr,benef:a.benef,fgts:tipo==='CLT'?rem*0.08:0,inss:0,custoTotal:(tipo==='CLT'?rem*1.08:rem)+a.vt+a.vr+a.benef,provFerias:pf,provDec:pd,provResc:pr+pj,provMes:pf+pd+pr+pj,ccId:principal?principal.ccId:'',rateios,pix:document.getElementById('mco-pix').value.trim(),banco:document.getElementById('mco-banco').value.trim(),ativo:true,
+    // v24: esporadico (diarista, cobertura) nao entra na estimativa mensal
+    // do centro de custo. Ate a v23 TODO colaborador ativo era estimado
+    // todo mes, entao a Vanessa e qualquer diarista apareciam com um mes
+    // inteiro de custo em contrato onde nao trabalharam.
+    esporadico:(document.getElementById('mco-vinculo')||{}).value==='esporadico',
+    up:Date.now()};
   if(id){const i=ERP.colaboradores.findIndex(x=>x.id===id);ERP.colaboradores[i]=obj;}else ERP.colaboradores.push(obj);
   salvarERP();fm('modal-col');renderColabs();
 }
@@ -2115,7 +2136,7 @@ function renderColabs(){
       const nome=rateios.length?(ERP.clientes.find(x=>x.id===rateios[0].ccId)?.nome||'ADM Geral'):'ADM Geral';
       centroCell=nome;
     }
-    return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span></td><td>${c.func||'—'}</td><td>${fmt(remCol(c))}${remCol(c)>Number(c.sal||0)?`<div style="font-size:10px;color:var(--text3)">base ${fmt(c.sal)} + adic.</div>`:''}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${centroCell}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;
+    return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span>${c.esporadico?' <span class="badge b-gray" title="Esporádico: não entra na estimativa mensal de custo do contrato">esporádico</span>':''}</td><td>${c.func||'—'}</td><td>${fmt(remCol(c))}${remCol(c)>Number(c.sal||0)?`<div style="font-size:10px;color:var(--text3)">base ${fmt(c.sal)} + adic.</div>`:''}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${centroCell}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;
   }).join('');
 }
 function excluirCol(id){if(!confirm('Excluir?'))return;ERP.colaboradores=ERP.colaboradores.filter(x=>x.id!==id);_marcarExcluido('colaboradores',id);salvarERP();renderColabs();}

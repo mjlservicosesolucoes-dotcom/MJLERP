@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v24</title>
+<title>MJL ERP Financeiro v25</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -544,8 +544,8 @@ tr:hover td{background:#fafbff;}
     <div class="fr">
       <div class="fg"><label>Tipo *</label><select id="mco-tipo" onchange="calcCustoCol()"><option value="CLT">CLT</option><option value="RPA">RPA</option><option value="PJ">PJ</option></select></div>
       <div class="fg"><label>Função</label><select id="mco-func"><option>ASG</option><option>Porteiro</option><option>Zelador</option><option>Vigia</option><option>Recepcionista</option><option>Outro</option></select></div>
-      <div class="fg"><label>Vínculo *</label><select id="mco-vinculo"><option value="fixo">Fixo — custo todo mês</option><option value="esporadico">Esporádico — só quando trabalha</option></select>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px;">Esporádico (diária, cobertura) não entra na estimativa de custo do contrato. Ele só aparece no mês em que houver folha fechada ou conta a pagar no nome dele.</div></div>
+      <div class="fg"><label>Vínculo *</label><select id="mco-vinculo"><option value="fixo">Fixo — custo todo mês</option><option value="esporadico">Esporádico — só quando trabalha</option><option value="afastado">Afastado — sem custo estimado</option></select>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;"><strong>Esporádico</strong> (diária, cobertura) e <strong>Afastado</strong> não entram na estimativa de custo do contrato — nem salário, nem FGTS, nem provisão, nem VT/VA. Eles só custam o que for lançado de verdade: folha fechada ou conta a pagar no nome deles. Use Afastado para quem continua no quadro mas parou de receber salário; o que ainda sai (FGTS, por exemplo) você lança em Contas a Pagar e cai no contrato pelo rateio.</div></div>
     </div>
     <div class="fr"><div class="fg"><label>Salário Base (R$)</label><input type="number" id="mco-sal" step="0.01" oninput="calcCustoCol()"></div><div class="fg"><label>Hora Extra — média/mês (R$)</label><input type="number" id="mco-he" step="0.01" oninput="calcCustoCol()"></div></div>
     <div class="fr3">
@@ -1441,7 +1441,7 @@ function _detalheRateioPorCliente(cliId,per){
         });
       });
     } else {
-      ERP.colaboradores.filter(c=>c.ativo!==false&&!c.esporadico).forEach(c=>{
+      ERP.colaboradores.filter(c=>c.ativo!==false&&!c.esporadico&&!c.afastado).forEach(c=>{
         const remC=remCol(c)||0;
         const benefC=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
         const clt=c.tipo==='CLT';
@@ -2091,7 +2091,7 @@ function abrirModalColab(id){
   if(id){
     const c=ERP.colaboradores.find(x=>x.id===id);
     document.getElementById('mco-id').value=c.id;document.getElementById('mco-nome').value=c.nome||'';document.getElementById('mco-cpf').value=c.cpf||'';document.getElementById('mco-tipo').value=c.tipo||'CLT';document.getElementById('mco-func').value=c.func||'ASG';document.getElementById('mco-sal').value=c.sal||'';document.getElementById('mco-he').value=c.he||'';document.getElementById('mco-adnot').value=c.adnot||'';document.getElementById('mco-insal').value=c.insal||'';document.getElementById('mco-peric').value=c.peric||'';document.getElementById('mco-outros').value=c.outros||'';document.getElementById('mco-vt').value=c.vt||'';document.getElementById('mco-vr').value=c.vr||'';document.getElementById('mco-benef').value=c.benef||'';document.getElementById('mco-pix').value=c.pix||'';document.getElementById('mco-banco').value=c.banco||'';
-    if(document.getElementById('mco-vinculo'))document.getElementById('mco-vinculo').value=c.esporadico?'esporadico':'fixo';
+    if(document.getElementById('mco-vinculo'))document.getElementById('mco-vinculo').value=c.afastado?'afastado':(c.esporadico?'esporadico':'fixo');
     if(c.rateios&&c.rateios.length)_rateiosCol=c.rateios.map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
     else if(c.ccId)_rateiosCol=[{ccId:c.ccId,pct:100}];
     else _rateiosCol=[];
@@ -2120,6 +2120,13 @@ function salvarColab(){
     // todo mes, entao a Vanessa e qualquer diarista apareciam com um mes
     // inteiro de custo em contrato onde nao trabalharam.
     esporadico:(document.getElementById('mco-vinculo')||{}).value==='esporadico',
+    // v25: afastado continua no quadro e na folha, mas NAO gera custo
+    // estimado nenhum. Caso real que motivou: colaborador cujo salario
+    // parou de sair ha tres meses enquanto outro cobre o posto — o
+    // contrato pagava os dois ao mesmo tempo na estimativa, R$ 3.364,04
+    // de um e R$ 1.850,00 do outro. O que ainda sai de verdade (FGTS)
+    // entra por Contas a Pagar e cai no contrato pelo rateio.
+    afastado:(document.getElementById('mco-vinculo')||{}).value==='afastado',
     up:Date.now()};
   if(id){const i=ERP.colaboradores.findIndex(x=>x.id===id);ERP.colaboradores[i]=obj;}else ERP.colaboradores.push(obj);
   salvarERP();fm('modal-col');renderColabs();
@@ -2136,7 +2143,7 @@ function renderColabs(){
       const nome=rateios.length?(ERP.clientes.find(x=>x.id===rateios[0].ccId)?.nome||'ADM Geral'):'ADM Geral';
       centroCell=nome;
     }
-    return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span>${c.esporadico?' <span class="badge b-gray" title="Esporádico: não entra na estimativa mensal de custo do contrato">esporádico</span>':''}</td><td>${c.func||'—'}</td><td>${fmt(remCol(c))}${remCol(c)>Number(c.sal||0)?`<div style="font-size:10px;color:var(--text3)">base ${fmt(c.sal)} + adic.</div>`:''}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${centroCell}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;
+    return`<tr><td><strong>${c.nome}</strong>${c.cpf?`<div style="font-size:11px;color:var(--text3)">${c.cpf}</div>`:''}</td><td><span class="badge ${c.tipo==='CLT'?'b-blue':c.tipo==='RPA'?'b-orange':'b-gray'}">${c.tipo}</span>${c.afastado?' <span class="badge b-yellow" title="Afastado: continua no quadro, mas não gera custo estimado no contrato">afastado</span>':(c.esporadico?' <span class="badge b-gray" title="Esporádico: não entra na estimativa mensal de custo do contrato">esporádico</span>':'')}</td><td>${c.func||'—'}</td><td>${fmt(remCol(c))}${remCol(c)>Number(c.sal||0)?`<div style="font-size:10px;color:var(--text3)">base ${fmt(c.sal)} + adic.</div>`:''}</td><td><strong style="color:var(--red)">${fmt(c.custoTotal)}</strong></td><td style="color:var(--purple)">${c.tipo==='CLT'?fmt(c.provMes):'—'}</td><td>${centroCell}</td><td><button class="btn btn-ghost btn-sm" onclick="abrirModalColab('${c.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirCol('${c.id}')">🗑️</button></td></tr>`;
   }).join('');
 }
 function excluirCol(id){if(!confirm('Excluir?'))return;ERP.colaboradores=ERP.colaboradores.filter(x=>x.id!==id);_marcarExcluido('colaboradores',id);salvarERP();renderColabs();}

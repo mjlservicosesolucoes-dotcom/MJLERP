@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v21</title>
+<title>MJL ERP Financeiro v22</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1143,6 +1143,46 @@ function getMes(){return document.getElementById('filtro-mes').value;}
 function atualizarTudo(){const p=document.querySelector('.page.active')?.id?.replace('page-','');if(p)navegar(p);}
 function popSel(ids,ph=''){ids.forEach(id=>{const s=document.getElementById(id);if(!s)return;const v=s.value;s.innerHTML=(ph||'<option value="">Selecione...</option>')+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');s.value=v;});}
 function popCC(ids){ids.forEach(id=>{const s=document.getElementById(id);if(!s)return;const v=s.value;s.innerHTML='<option value="">ADM Geral</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');s.value=v;});}
+// v22 ---------------------------------------------------------------
+// BUG: cinco lugares criavam conta a pagar gravando catNome e NUNCA
+// catId — salario estimado, FGTS, INSS Empresa, salario da folha real e
+// compra do almoxarifado. O DRE classifica por catId, entao esses
+// lancamentos nao caiam em bloco nenhum: em 21/10/2026 eram
+// R$ 21.111,93, 31% do total das contas a pagar, invisiveis na
+// composicao (o total estava certo, a composicao e que mentia).
+// Conserto em duas pontas: resolver o id na hora de criar, e classificar
+// pelo nome quando o id faltar, para o historico se corrigir sozinho.
+function _catIdPorNome(nome, tipoEsperado){
+  if(!nome) return '';
+  var alvo=String(nome).trim().toLowerCase();
+  var achadas=ERP.categorias.filter(function(c){
+    return String(c.nome||'').trim().toLowerCase()===alvo;
+  });
+  if(!achadas.length) return '';
+  if(achadas.length>1 && tipoEsperado){
+    // Com duplicata, vale a que tem o tipo certo — foi assim que o FGTS
+    // de uma geracao ficou marcado como "imposto" e caiu no bloco errado.
+    var certa=achadas.filter(function(c){ return c.tipo===tipoEsperado; });
+    if(certa.length) achadas=certa;
+  }
+  // Id curto (p1, d6, i1) e o padrao original: prefere o estavel.
+  var curta=achadas.filter(function(c){ return String(c.id||'').length<=4; });
+  return (curta.length?curta[0]:achadas[0]).id;
+}
+// Categoria de um lancamento: por id; faltando id, pelo nome gravado.
+function _catDoLanc(p){
+  if(!p) return null;
+  if(p.catId){
+    var porId=ERP.categorias.find(function(c){ return c.id===p.catId; });
+    if(porId) return porId;
+  }
+  if(p.catNome){
+    var id=_catIdPorNome(p.catNome);
+    if(id) return ERP.categorias.find(function(c){ return c.id===id; });
+  }
+  return null;
+}
+
 function popCatSel(id){const s=document.getElementById(id);if(!s)return;const v=s.value;s.innerHTML='<option value="">Sem categoria</option>'+ERP.categorias.filter(c=>!['receita','aporte','investimento','resgate'].includes(c.tipo)).map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');s.value=v;}
 function popSv(id){const s=document.getElementById(id);if(!s)return;const v=s.value;s.innerHTML='<option value="">Selecione...</option>'+ERP.servicos.map(sv=>`<option value="${sv.id}">${sv.nome} — ${fmt(sv.valor)}</option>`).join('');s.value=v;}
 function limparF(pre){['q','st','cli','cat','cc','de','ate','tp'].forEach(s=>{const el=document.getElementById(pre+'-'+s);if(el)el.value='';});atualizarTudo();}
@@ -1263,10 +1303,10 @@ function renderDRE(){
   const impRet=imp.filter(i=>i.ret==='sim').reduce((s,i)=>s+Number(i.val||0),0);
   const dasFinal=Math.max(0,das-impRet);
   const recLiq=recBruta-ret-dasFinal;
-  const folha=pag.filter(p=>{const c=ERP.categorias.find(x=>x.id===p.catId);return c?.tipo==='pessoal';}).reduce((s,p)=>s+Number(p.val||0),0);
+  const folha=pag.filter(p=>{const c=_catDoLanc(p);return c?.tipo==='pessoal';}).reduce((s,p)=>s+Number(p.val||0),0);
   const impPag=imp.filter(i=>i.ret!=='sim').reduce((s,i)=>s+Number(i.val||0),0);
-  const despF=pag.filter(p=>{const c=ERP.categorias.find(x=>x.id===p.catId);return c?.tipo==='despesa_fixa';}).reduce((s,p)=>s+Number(p.val||0),0);
-  const despV=pag.filter(p=>{const c=ERP.categorias.find(x=>x.id===p.catId);return c?.tipo==='despesa_var';}).reduce((s,p)=>s+Number(p.val||0),0);
+  const despF=pag.filter(p=>{const c=_catDoLanc(p);return c?.tipo==='despesa_fixa';}).reduce((s,p)=>s+Number(p.val||0),0);
+  const despV=pag.filter(p=>{const c=_catDoLanc(p);return c?.tipo==='despesa_var';}).reduce((s,p)=>s+Number(p.val||0),0);
   const prov=movs.filter(mv=>mv.tipo==='deposito').reduce((s,mv)=>s+Number(mv.val||0),0);
   const resg=movs.filter(mv=>mv.tipo==='resgate').reduce((s,mv)=>s+Number(mv.val||0),0);
   const lucBruto=recLiq-folha-impPag;
@@ -1711,10 +1751,10 @@ function gerarFolha(){
   const conta=ERP.contas.find(c=>c.tipo==='provisao');
   cols.forEach(col=>{
     const remF=remCol(col);
-    ERP.pagar.push({up:Date.now(),id:gid(),desc:`Salário — ${col.nome} (${col.tipo})`,catNome:col.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:remF,venc:mes+'-05',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
+    ERP.pagar.push({up:Date.now(),id:gid(),desc:`Salário — ${col.nome} (${col.tipo})`,catNome:col.tipo==='CLT'?'Folha CLT':'Pagamento RPA',catId:_catIdPorNome(col.tipo==='CLT'?'Folha CLT':'Pagamento RPA','pessoal'),val:remF,venc:mes+'-05',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
     if(col.tipo==='CLT'){
-      ERP.pagar.push({up:Date.now(),id:gid(),desc:`FGTS — ${col.nome}`,catNome:'Encargos FGTS',val:remF*0.08,venc:mes+'-07',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
-      ERP.pagar.push({up:Date.now(),id:gid(),desc:`INSS Emp. — ${col.nome}`,catNome:'Encargos INSS',val:remF*0.20,venc:mes+'-20',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
+      ERP.pagar.push({up:Date.now(),id:gid(),desc:`FGTS — ${col.nome}`,catNome:'Encargos FGTS',catId:_catIdPorNome('Encargos FGTS','pessoal'),val:remF*0.08,venc:mes+'-07',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
+      ERP.pagar.push({up:Date.now(),id:gid(),desc:`INSS Emp. — ${col.nome}`,catNome:'Encargos INSS',catId:_catIdPorNome('Encargos INSS','pessoal'),val:remF*0.20,venc:mes+'-20',ccId:col.ccId||'',rateios:(col.rateios&&col.rateios.length)?col.rateios:undefined,st:'pendente',comp:mes,up:Date.now()});
       if(col.provMes>0&&conta){ERP.movimentos.push({up:Date.now(),id:gid(),contaId:conta.id,tipo:'deposito',val:col.provMes,data:new Date().toISOString().slice(0,10),comp:mes,desc:`Provisão RH — ${col.nome}`});conta.saldo=(conta.saldo||0)+col.provMes;}
     }
   });
@@ -2215,7 +2255,7 @@ function fecharFolhaMes(){
     const compPagto=pagProx?_addMes(mes,1):mes;
     if(pagProx)algumProx=true;
     const tag=pagProx?' · folha real (comp. '+_mesLabelCurto(mes)+')':' · folha real';
-    if(liq>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,folhaComp:mes,desc:`Salário — ${it.nome} (${it.tipo})${tag}`,catNome:it.tipo==='CLT'?'Folha CLT':'Pagamento RPA',val:Math.round(liq*100)/100,venc:compPagto+'-05',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:compPagto});
+    if(liq>0)ERP.pagar.push({up:Date.now(),id:gid(),folha:true,folhaComp:mes,desc:`Salário — ${it.nome} (${it.tipo})${tag}`,catNome:it.tipo==='CLT'?'Folha CLT':'Pagamento RPA',catId:_catIdPorNome(it.tipo==='CLT'?'Folha CLT':'Pagamento RPA','pessoal'),val:Math.round(liq*100)/100,venc:compPagto+'-05',ccId:it.ccId||'',rateios:rat,st:'pendente',comp:compPagto});
   });
   salvarERP();renderFolhaMes();
   alert('✅ Folha fechada! Salários gerados em Contas a Pagar.'+(algumProx?'\n\n📅 Os RPA marcados como "Mês seguinte" foram lançados com vencimento e competência no mês seguinte — aparecem no Centro de Custo/DRE do mês em que você paga.':'')+'\n\n📌 Quando as GUIAS chegarem (FGTS/INSS), lance cada uma em Contas a Pagar e use o botão 🏛️ Ratear guia pela folha.\n💜 E transfira o TOTAL PROVISÃO para a conta virtual Provisão RH.');
@@ -2645,7 +2685,7 @@ function salvarEntrada(){
   ERP.estoqueMov.push({up:Date.now(),id:gid(),tipo:'entrada',prodId:p.id,prodNome:p.nome,data,qtd,uni:p.uniCompra,qtdCons,valTotal:val,forn});
   recalcProduto(p.id);
   if(document.getElementById('men-pagar').checked){
-    ERP.pagar.push({up:Date.now(),id:gid(),desc:`Compra: ${p.nome} — ${qtd} ${p.uniCompra}${forn?' ('+forn+')':''}`,catNome:'Materiais / Insumos',val,venc:document.getElementById('men-venc').value||data,ccId:'',st:'pendente',estoque:true});
+    ERP.pagar.push({up:Date.now(),id:gid(),desc:`Compra: ${p.nome} — ${qtd} ${p.uniCompra}${forn?' ('+forn+')':''}`,catNome:'Materiais / Insumos',catId:_catIdPorNome('Materiais / Insumos','despesa_var'),val,venc:document.getElementById('men-venc').value||data,ccId:'',st:'pendente',estoque:true});
   }
   salvarERP();fm('modal-ent');renderAlmox();
   alert('✅ Entrada registrada: +'+qtdCons+' '+p.uniCons+'(s). Custo médio atual: '+fmt(p.custoMedio)+'/'+p.uniCons+'.');

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v30</title>
+<title>MJL ERP Financeiro v31</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1375,6 +1375,29 @@ function renderDRE(){
 
 // FLUXO
 function resetFluxo(){const h=new Date();document.getElementById('fc-de').value=new Date(h.getFullYear(),h.getMonth(),1).toISOString().slice(0,10);document.getElementById('fc-ate').value=new Date(h.getFullYear(),h.getMonth()+1,0).toISOString().slice(0,10);renderFluxo();}
+// v31 ---------------------------------------------------------------
+// Previsao de VT/VA do mes seguinte. E SO REFERENCIA — nao cria
+// lancamento nenhum. A Marjorie lanca VT e VA a mao de proposito: se
+// houve falta ou troca de posto ela ja desconta na hora, e um gerador
+// automatico so criaria lancamento para ela corrigir depois.
+// O que falta e saber QUANTO deixar em conta: ela paga no ultimo dia do
+// mes para a pessoa usar no mes seguinte.
+function _ultimoDiaDoMes(comp){
+  const a=Number(String(comp).slice(0,4)), m=Number(String(comp).slice(5,7));
+  return new Date(a, m, 0).toISOString().slice(0,10);
+}
+function _previsaoBeneficios(){
+  const linhas=[];
+  (ERP.colaboradores||[]).forEach(function(c){
+    if(!c || c.ativo===false || c.esporadico || c.afastado) return;
+    const vt=Number(c.vt||0), vr=Number(c.vr||0), be=Number(c.benef||0);
+    const t=vt+vr+be;
+    if(t>0) linhas.push({nome:c.nome, vt:vt, vr:vr, benef:be, total:t});
+  });
+  linhas.sort(function(a,b){ return b.total-a.total; });
+  return linhas;
+}
+
 function renderFluxo(){
   const de=document.getElementById('fc-de')?.value||'';const ate=document.getElementById('fc-ate')?.value||'';const mes=getMes();
   let ent,sai;
@@ -1389,7 +1412,30 @@ function renderFluxo(){
   const pE=ent.reduce((s,r)=>s+_recSaldo(r),0);
   const pS=sai.filter(p=>p.st==='pendente').reduce((s,p)=>s+Number(p.val||0),0);
   const saldo=tE-tS;const saldoPrev=saldo+pE-pS;
+  // v31: de que mes e cada competencia, e quanto de VT/VA vem a seguir.
+  const _mesBase=(de||ate)?String(ate||de).slice(0,7):mes;
+  const _prox=_addMes(_mesBase,1);
+  const _prev=_previsaoBeneficios();
+  const _prevTot=_prev.reduce(function(s,x){ return s+x.total; },0);
+  const _prevVT=_prev.reduce(function(s,x){ return s+x.vt; },0);
+  const _prevVR=_prev.reduce(function(s,x){ return s+x.vr+x.benef; },0);
+  const _prevData=_ultimoDiaDoMes(_mesBase);
   document.getElementById('fc-body').innerHTML=`
+    ${_prevTot>0?`<div class="info-box blue" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div><strong>🎫 VT / VA de ${_mesLabel(_prox)}</strong>
+          <div style="font-size:11.5px;color:var(--text2);margin-top:2px;">
+            Para pagar até <strong>${new Date(_prevData+'T12:00').toLocaleDateString('pt-BR')}</strong>, um dia antes de virar o mês.
+            Soma do cadastro de quem está ativo — fora esporádico e afastado.
+            <strong>É só referência: não cria lançamento.</strong> Lance à mão, já com o desconto de falta ou troca.
+          </div></div>
+        <div style="text-align:right;"><div style="font-size:19px;font-weight:800;color:var(--brand)">${fmt(_prevTot)}</div>
+          <div style="font-size:11px;color:var(--text3)">VT ${fmt(_prevVT)} · VA ${fmt(_prevVR)}</div></div>
+      </div>
+      <details style="margin-top:8px;"><summary style="cursor:pointer;font-size:11.5px;color:var(--text2)">ver pessoa por pessoa</summary>
+        <div style="margin-top:6px;">${_prev.map(function(x){ return '<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0;border-bottom:1px solid var(--bg);"><span>'+x.nome+'</span><span>VT '+fmt(x.vt)+' · VA '+fmt(x.vr+x.benef)+' &nbsp;<strong>'+fmt(x.total)+'</strong></span></div>'; }).join('')}</div>
+      </details>
+    </div>`:''}
     <div class="stat-grid" style="margin-bottom:14px;">
       <div class="stat"><div class="lbl">Entradas Realizadas</div><div class="val" style="color:var(--green)">${fmt(tE)}</div></div>
       <div class="stat"><div class="lbl">Saídas Realizadas</div><div class="val" style="color:var(--red)">${fmt(tS)}</div></div>
@@ -1398,13 +1444,13 @@ function renderFluxo(){
     </div>
     <div style="margin-bottom:12px;">
       <div class="dre-row hdr"><span>↓ ENTRADAS</span><span>Valor</span></div>
-      ${ent.map(r=>`<div class="dre-row sub"><span>${r.cliNome||''} — ${r.desc||''} <span class="badge ${_recSt(r)==='recebido'?'b-green':_recSt(r)==='parcial'?'b-orange':_recSt(r)==='atraso'?'b-red':'b-yellow'}">${_recSt(r)}</span>${_recSt(r)==='parcial'?` <span style="font-size:10px;color:var(--text3)">recebido ${fmt(_recRecebido(r))}</span>`:''}</span><span style="color:var(--green)">${fmt(r.val)}</span></div>`).join('')||'<div class="dre-row sub"><span>—</span><span></span></div>'}
+      ${ent.map(r=>`<div class="dre-row sub"><span>${r.cliNome||''} — ${r.desc||''} <span class="badge ${_recSt(r)==='recebido'?'b-green':_recSt(r)==='parcial'?'b-orange':_recSt(r)==='atraso'?'b-red':'b-yellow'}">${_recSt(r)}</span>${(r.comp&&r.comp!==(r.venc||'').slice(0,7))?` <span class="badge b-purple" title="Mês em que o serviço foi prestado">comp. ${_mesLabelCurto(r.comp)}</span>`:''}${_recSt(r)==='parcial'?` <span style="font-size:10px;color:var(--text3)">recebido ${fmt(_recRecebido(r))}</span>`:''}</span><span style="color:var(--green)">${fmt(r.val)}</span></div>`).join('')||'<div class="dre-row sub"><span>—</span><span></span></div>'}
       ${res>0?`<div class="dre-row sub" style="color:var(--green)"><span>💰 Resgates de Provisão</span><span>+${fmt(res)}</span></div>`:''}
       <div class="dre-row total"><span>Total Entradas</span><span style="color:var(--green)">${fmt(tE+pE)}</span></div>
     </div>
     <div>
       <div class="dre-row hdr"><span>↑ SAÍDAS</span><span>Valor</span></div>
-      ${sai.map(p=>`<div class="dre-row sub"><span>${p.desc||p.tipo||''} ${p.catNome?'<span class="badge b-gray">'+p.catNome+'</span>':''} <span class="badge ${p.st==='pago'?'b-green':p.st==='atraso'?'b-red':'b-yellow'}">${p.st||''}</span></span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')||'<div class="dre-row sub"><span>—</span><span></span></div>'}
+      ${sai.map(p=>`<div class="dre-row sub"><span>${p.desc||p.tipo||''} ${p.catNome?'<span class="badge b-gray">'+p.catNome+'</span>':''} <span class="badge ${p.st==='pago'?'b-green':p.st==='atraso'?'b-red':'b-yellow'}">${p.st||''}</span>${(p.comp&&p.comp!==(p.venc||'').slice(0,7))?` <span class="badge b-purple" title="Mês em que o custo pertence">comp. ${_mesLabelCurto(p.comp)}</span>`:''}</span><span style="color:var(--red)">${fmt(p.val)}</span></div>`).join('')||'<div class="dre-row sub"><span>—</span><span></span></div>'}
       ${dep>0?`<div class="dre-row sub" style="color:var(--purple)"><span>🏦 Depósito em Provisões</span><span>${fmt(dep)}</span></div>`:''}
       <div class="dre-row total"><span>Total Saídas</span><span style="color:var(--red)">${fmt(tS+pS)}</span></div>
     </div>`;
@@ -1531,7 +1577,10 @@ function _detalheRateioPagarPorCliente(cliId,per){
     if(p.estoque||p.folha||p.capital||/\u00b7\s*folha real/.test(p.desc||''))return;
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
-      if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc+(per.multi?' · '+_mesLabelCurto(_compPagar(p)):''),pct:Number(r.pct),val:valor*Number(r.pct)/100});
+      if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc+(per.multi?' · '+_mesLabelCurto(_compPagar(p)):''),pct:Number(r.pct),val:valor*Number(r.pct)/100,
+        // v31: o mes em que o dinheiro sai, quando for diferente do mes
+        // do custo. Competencia e margem; vencimento e caixa.
+        vencMes:(p.venc||'').slice(0,7), compMes:_compPagar(p)});
     });
   });
   return linhas;
@@ -1580,7 +1629,7 @@ function renderCC(){
         ${rateioLinhas.map(r=>r.parcela==='aviso'
    ?`<div style="padding:6px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);font-weight:700;">${r.nome}</div>`
    :`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${r.nome} <span class="badge b-gray">${r.parcela||''}</span>${r.pct<100?` <span class="badge b-purple">${r.pct}% rateio</span>`:''}</span><span>(${fmt(r.val)})</span></div>`).join('')}
-        ${pagLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span>(${fmt(p.val)})</span></div>`).join('')}
+        ${pagLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}${(p.vencMes&&p.compMes&&p.vencMes!==p.compMes)?` <span class="badge b-gray" title="O custo é deste mês, mas o dinheiro sai em outro">paga em ${_mesLabelCurto(p.vencMes)}</span>`:''}</span><span>(${fmt(p.val)})</span></div>`).join('')}
         ${imp.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${i.tipo}: ${i.desc||''}${i.pct<100?` <span class="badge b-purple">${i.pct}% rateio</span>`:''}</span><span>(${fmt(i.val)})</span></div>`).join('')}
         ${matLinhas.map(m=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) 📦 ${m.desc}</span><span>(${fmt(m.val)})</span></div>`).join('')}
         <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:700;border-top:2px solid var(--border);margin-top:4px;"><span>Margem</span><strong style="color:${margem>=0?'var(--green)':'var(--red)'}">${fmt(margem)} (${fmtP(perc)})</strong></div>

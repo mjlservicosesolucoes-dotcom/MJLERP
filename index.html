@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v22</title>
+<title>MJL ERP Financeiro v23</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1373,12 +1373,44 @@ function _rateiosDoColab(c){
   if(c.ccId)return [{ccId:c.ccId,pct:100}];
   return [{ccId:'',pct:100}];
 }
+// v23 ---------------------------------------------------------------
+// A mao de obra do contrato saia como UM numero so, e as parcelas
+// mudavam de significado conforme o mes:
+//   mes com folha fechada  -> proventos + provisoes (FGTS de fora)
+//   mes sem folha fechada  -> remuneracao x 1,08 (FGTS escondido no
+//                             1,08) + provisoes + VT/VA do cadastro
+// Como a Marjorie tambem lanca FGTS e VT/VA a mao (valor do contador,
+// que e o que ela paga de verdade), o mes nao fechado contava DUAS
+// vezes a mesma coisa.
+// Regra do v23, decidida com ela: o FGTS vem do contador, e
+// ONDE EXISTE LANCAMENTO REAL, O ESTIMADO SOME. Cada linha agora diz
+// de que parcela ela e, para dar pra olhar e ver quanto do contrato e
+// salario, quanto e encargo e quanto e beneficio.
+function _temLancReal(comp, palavras){
+  return (ERP.pagar||[]).some(function(p){
+    if(!p || p.estoque || p.capital) return false;
+    if(_compPagar(p)!==comp) return false;
+    var cat=_catDoLanc(p);
+    var nome=String((cat&&cat.nome)||p.catNome||'').toLowerCase();
+    return palavras.some(function(w){ return nome.indexOf(w)>=0; });
+  });
+}
 function _detalheRateioPorCliente(cliId,per){
   const linhas=[];
-  // Percorre cada mês do período; onde há folha fechada usa a folha real, senão usa estimativa do cadastro
   let comp=per.ini;
   while(comp<=per.fim){
-    const folhaReal=(ERP.folhas||[]).find(f=>f.comp===comp&&f.fechada);
+    // Mais de uma folha fechada no mesmo mes: ate a v22 o find() pegava
+    // a primeira e ignorava a outra calado. Agora avisa.
+    const fechadas=(ERP.folhas||[]).filter(f=>f.comp===comp&&f.fechada);
+    if(fechadas.length>1 && !cliId){
+      linhas.push({nome:'\u26A0\uFE0F '+fechadas.length+' folhas fechadas para '+_mesLabelCurto(comp)+' — o ERP está usando só a primeira',
+                   parcela:'aviso', pct:100, val:0});
+    }
+    const folhaReal=fechadas[0];
+    // O FGTS vem do contador (lancamento manual). O estimado so entra
+    // quando nao ha lancamento real daquele tipo naquele mes.
+    const temFgtsReal = _temLancReal(comp, ['fgts']);
+    const temBenefReal= _temLancReal(comp, ['vale transporte','vale refei','vale funcion','vt','va']);
     if(folhaReal){
       folhaReal.itens.forEach(it=>{
         const c=_fmCalcItem(it);
@@ -1386,17 +1418,30 @@ function _detalheRateioPorCliente(cliId,per){
         const rats=(cad&&cad.rateios&&cad.rateios.length)?cad.rateios
           :((cad&&cad.ccId)?[{ccId:cad.ccId,pct:100}]
           :((it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}]));
+        const selo=it.nome+(per.multi?' 🧾 '+_mesLabelCurto(comp):' 🧾');
         rats.forEach(r=>{
-          if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:it.nome+(per.multi?' 🧾 '+_mesLabelCurto(comp):' 🧾'),pct:Number(r.pct),val:(c.proventos+c.provTot)*Number(r.pct)/100});
+          if((r.ccId||'')!==(cliId||'')||!(Number(r.pct||0)>0)) return;
+          const f=Number(r.pct)/100;
+          if(c.proventos>0) linhas.push({nome:selo,parcela:'proventos',pct:Number(r.pct),val:c.proventos*f});
+          if(!temFgtsReal && c.fgts>0) linhas.push({nome:selo,parcela:'FGTS estimado',pct:Number(r.pct),val:c.fgts*f});
+          if(c.provTot>0) linhas.push({nome:selo,parcela:'provisões',pct:Number(r.pct),val:c.provTot*f});
         });
       });
     } else {
       ERP.colaboradores.filter(c=>c.ativo!==false).forEach(c=>{
         const remC=remCol(c)||0;
         const benefC=Number(c.vt||0)+Number(c.vr||0)+Number(c.benef||0);
-        const custo=(c.tipo==='CLT'?(remC*1.08+Number(c.provMes||((remC*1.333/12)+(remC/12)+(remC*0.5/12)+(remC*Number(ERP.config.jurPerc||5)/100)))):remC)+benefC;
+        const clt=c.tipo==='CLT';
+        const fgtsC=clt?remC*0.08:0;
+        const provC=clt?Number(c.provMes||((remC*1.333/12)+(remC/12)+(remC*0.5/12)+(remC*Number(ERP.config.jurPerc||5)/100))):0;
+        const selo=c.nome+' ~'+(per.multi?' '+_mesLabelCurto(comp):'');
         _rateiosDoColab(c).forEach(r=>{
-          if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({nome:c.nome+(per.multi?' '+_mesLabelCurto(comp):''),pct:Number(r.pct),val:custo*Number(r.pct)/100});
+          if((r.ccId||'')!==(cliId||'')||!(Number(r.pct||0)>0)) return;
+          const f=Number(r.pct)/100;
+          if(remC>0)  linhas.push({nome:selo,parcela:'proventos estimados',pct:Number(r.pct),val:remC*f});
+          if(!temFgtsReal && fgtsC>0) linhas.push({nome:selo,parcela:'FGTS estimado',pct:Number(r.pct),val:fgtsC*f});
+          if(provC>0) linhas.push({nome:selo,parcela:'provisões',pct:Number(r.pct),val:provC*f});
+          if(!temBenefReal && benefC>0) linhas.push({nome:selo,parcela:'VT/VA estimado',pct:Number(r.pct),val:benefC*f});
         });
       });
     }
@@ -1457,7 +1502,9 @@ function renderCC(){
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;"><span>Receita Bruta</span><strong style="color:var(--green)">${fmt(receita)}</strong></div>
         ${ret>0?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) Retenções</span><span>(${fmt(ret)})</span></div>`:''}
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) DAS (${ERP.config.aliq}%)</span><span>(${fmt(das)})</span></div>
-        ${rateioLinhas.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${r.nome} <span class="badge b-purple">${r.pct}% rateio</span></span><span>(${fmt(r.val)})</span></div>`).join('')}
+        ${rateioLinhas.map(r=>r.parcela==='aviso'
+   ?`<div style="padding:6px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);font-weight:700;">${r.nome}</div>`
+   :`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${r.nome} <span class="badge b-gray">${r.parcela||''}</span>${r.pct<100?` <span class="badge b-purple">${r.pct}% rateio</span>`:''}</span><span>(${fmt(r.val)})</span></div>`).join('')}
         ${pagLinhas.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${p.desc}${p.pct<100?` <span class="badge b-purple">${p.pct}% rateio</span>`:''}</span><span>(${fmt(p.val)})</span></div>`).join('')}
         ${imp.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) ${i.tipo}: ${i.desc||''}${i.pct<100?` <span class="badge b-purple">${i.pct}% rateio</span>`:''}</span><span>(${fmt(i.val)})</span></div>`).join('')}
         ${matLinhas.map(m=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12px;color:var(--red);"><span>(−) 📦 ${m.desc}</span><span>(${fmt(m.val)})</span></div>`).join('')}

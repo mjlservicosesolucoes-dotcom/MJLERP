@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v27</title>
+<title>MJL ERP Financeiro v28</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1458,9 +1458,17 @@ function _detalheRateioPorCliente(cliId,per){
       folhaReal.itens.forEach(it=>{
         const c=_fmCalcItem(it);
         const cad=ERP.colaboradores.find(x=>x.id===it.colabId);
-        const rats=(cad&&cad.rateios&&cad.rateios.length)?cad.rateios
-          :((cad&&cad.ccId)?[{ccId:cad.ccId,pct:100}]
-          :((it.rateios&&it.rateios.length)?it.rateios:[{ccId:it.ccId||'',pct:100}]));
+        // v28: a ordem estava invertida. Folha FECHADA e historia: o
+        // rateio que vale e o que foi gravado nela. Usando o cadastro de
+        // hoje, trocar o centro de custo de alguem reescrevia todos os
+        // meses passados — foi o que aconteceu em 21/10/2026 ao mover o
+        // Diego Lira de Le Levant para Living Choice: o salario dele de
+        // agosto e setembro saiu do Le Levant e foi parar no contrato
+        // novo, onde ele nem trabalhava ainda.
+        const rats=(it.rateios&&it.rateios.length)?it.rateios
+          :(it.ccId?[{ccId:it.ccId,pct:100}]
+          :((cad&&cad.rateios&&cad.rateios.length)?cad.rateios
+          :((cad&&cad.ccId)?[{ccId:cad.ccId,pct:100}]:[{ccId:'',pct:100}])));
         const selo=it.nome+(per.multi?' 🧾 '+_mesLabelCurto(comp):' 🧾');
         rats.forEach(r=>{
           if((r.ccId||'')!==(cliId||'')||!(Number(r.pct||0)>0)) return;
@@ -1505,7 +1513,10 @@ function _rateiosDoPagar(p){
 function _detalheRateioPagarPorCliente(cliId,per){
   const linhas=[];
   ERP.pagar.filter(p=>_dentro(_compPagar(p),per)).forEach(p=>{
-    if(p.estoque||p.folha||p.capital)return;
+    // v28: a marca `folha` e o criterio. O texto " · folha real" so e
+    // produzido pelo Fechar a folha, entao serve de rede se a marca se
+    // perder de novo — melhor duplicar o criterio do que duplicar custo.
+    if(p.estoque||p.folha||p.capital||/\u00b7\s*folha real/.test(p.desc||''))return;
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc+(per.multi?' · '+_mesLabelCurto(_compPagar(p)):''),pct:Number(r.pct),val:valor*Number(r.pct)/100});
@@ -1977,7 +1988,22 @@ function salvarPagar(){
   const id=document.getElementById('mpag-id').value;const catId=document.getElementById('mpag-cat').value;const cat=ERP.categorias.find(c=>c.id===catId);
   const rateios=_rateiosPag.filter(r=>Number(r.pct||0)>0).map(r=>({ccId:r.ccId||'',pct:Number(r.pct||0)}));
   const principal=rateios.length?rateios.reduce((a,b)=>b.pct>a.pct?b:a):null;
+  // v28: salvarPagar remontava o objeto SO com o que existe no
+  // formulario, e o formulario nao tem folha/folhaComp/estoque. Abrir e
+  // salvar um salario gerado pela folha apagava a marca `folha`, e a
+  // partir dai o Centro de Custo passava a somar esse salario POR CIMA
+  // da mao de obra da propria folha. Em 21/10/2026 os 17 lancamentos de
+  // salario estavam todos sem a marca: R$ 6.142,70 duplicados em junho,
+  // R$ 8.437,80 em agosto e R$ 11.932,66 em setembro.
+  // Regra: campo que o formulario nao mostra tem que ser COPIADO do
+  // registro antigo, nunca deixado cair.
+  const ant=id?ERP.pagar.find(x=>x.id===id):null;
   const obj={up:Date.now(),id:id||gid(),desc:document.getElementById('mpag-desc').value.trim(),catId,catNome:cat?.nome||'',val:Number(document.getElementById('mpag-val').value||0),venc:document.getElementById('mpag-venc').value,comp:document.getElementById('mpag-comp').value||'',capital:document.getElementById('mpag-capital').checked,ccId:principal?principal.ccId:'',rateios,recorr:document.getElementById('mpag-rec').value,st:document.getElementById('mpag-st').value,dpag:document.getElementById('mpag-dpag').value,obs:document.getElementById('mpag-obs').value.trim()};
+  if(ant){
+    if(ant.folha)obj.folha=true;
+    if(ant.folhaComp)obj.folhaComp=ant.folhaComp;
+    if(ant.estoque)obj.estoque=true;
+  }
   if(id){const i=ERP.pagar.findIndex(x=>x.id===id);ERP.pagar[i]=obj;}else ERP.pagar.push(obj);
   salvarERP();fm('modal-pag');renderPagar();renderDash();
 }

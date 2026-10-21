@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v25</title>
+<title>MJL ERP Financeiro v27</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -253,7 +253,7 @@ tr:hover td{background:#fafbff;}
       </div>
       <div class="filtros">
         <input type="text" id="rec-q" placeholder="🔍 Buscar..." oninput="renderReceber()">
-        <select id="rec-st" onchange="renderReceber()"><option value="">Todos status</option><option value="pendente">Pendente</option><option value="recebido">Recebido</option><option value="atraso">Em Atraso</option></select>
+        <select id="rec-st" onchange="renderReceber()"><option value="">Todos status</option><option value="pendente">Pendente</option><option value="parcial">Parcial</option><option value="recebido">Recebido</option><option value="atraso">Em Atraso</option></select>
         <select id="rec-cli" onchange="renderReceber()"><option value="">Todos clientes</option></select>
         <input type="date" id="rec-de" onchange="renderReceber()">
         <input type="date" id="rec-ate" onchange="renderReceber()">
@@ -930,12 +930,41 @@ tr:hover td{background:#fafbff;}
   </div>
 </div></div>
 
+<div id="modal-baixa" class="modal-overlay hidden"><div class="modal" style="max-width:430px;">
+  <div class="modal-hdr"><h3>💰 Registrar recebimento</h3><button class="modal-cls" onclick="fm('modal-baixa')">×</button></div>
+  <div class="modal-body">
+    <div style="margin-bottom:10px;"><strong id="mbx-tit"></strong><div style="font-size:12px;color:var(--text3)" id="mbx-cli"></div></div>
+    <div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12.5px;">
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Valor do lançamento</span><strong id="mbx-total"></strong></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Já recebido</span><strong style="color:var(--green)" id="mbx-jarec"></strong></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;border-top:1px solid var(--border);margin-top:4px;padding-top:6px;"><span>Saldo em aberto</span><strong style="color:var(--yellow)" id="mbx-saldo"></strong></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Valor recebido agora (R$)</label><input type="number" step="0.01" id="mbx-val"></div>
+      <div class="fg"><label>Data</label><input type="date" id="mbx-data"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);">Pode receber em partes — sinal agora, saldo depois. O lançamento só fica <strong>recebido</strong> quando o saldo zera; até lá fica <strong>parcial</strong>, e o que falta continua na previsão do Fluxo de Caixa.</div>
+    <div id="mbx-hist"></div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn btn-primary" onclick="confirmarBaixa()">✅ Registrar</button>
+      <button class="btn btn-ghost" onclick="fm('modal-baixa')">Cancelar</button>
+    </div>
+  </div>
+</div></div>
+
 <div id="modal-vd" class="modal-overlay hidden"><div class="modal" style="max-width:600px;">
   <div class="modal-hdr"><h3>Nova Venda / Serviço Avulso</h3><button class="modal-cls" onclick="fm('modal-vd')">×</button></div>
   <div class="modal-body">
     <input type="hidden" id="mvd-id">
     <div class="fr"><div class="fg"><label>Cliente *</label><select id="mvd-cli"><option value="">Selecione...</option></select></div><div class="fg"><label>Data</label><input type="date" id="mvd-data"></div></div>
-    <div class="fg"><label>Vencimento</label><input type="date" id="mvd-venc"></div>
+    <div class="fr"><div class="fg"><label>Vencimento</label><input type="date" id="mvd-venc" onchange="_vdSugereComp()"></div>
+      <div class="fg"><label>Competência</label><input type="month" id="mvd-comp">
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">É o mês em que o serviço foi prestado — é por ele que a venda entra no Centro de Custo e no DRE, junto do custo daquele mês. Até a v25 a competência era a data da venda, calada, e a cobertura que virava o mês aparecia num mês e custava no outro.</div></div></div>
+    <div class="fr" id="mvd-sinal-box">
+      <div class="fg"><label>Sinal / entrada (R$)</label><input type="number" step="0.01" id="mvd-sinal" placeholder="deixe vazio se não tem sinal"></div>
+      <div class="fg"><label>Vencimento do sinal</label><input type="date" id="mvd-sinal-venc"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin:-6px 0 12px;">Preenchendo o sinal, a venda gera <strong>dois</strong> lançamentos em Contas a Receber: o sinal, no vencimento dele, e o saldo, no vencimento da venda. Cada um aparece na previsão no mês certo. Só vale ao criar a venda — depois, ajuste cada lançamento em Contas a Receber.</div>
     <div style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <label style="font-size:11px;font-weight:700;color:var(--text2);">ITENS / SERVIÇOS</label>
@@ -1354,9 +1383,10 @@ function renderFluxo(){
   const movs=ERP.movimentos.filter(mv=>{const d=mv.data||'';return(!de||d>=de)&&(!ate||d<=ate);});
   const dep=movs.filter(mv=>mv.tipo==='deposito').reduce((s,mv)=>s+Number(mv.val||0),0);
   const res=movs.filter(mv=>mv.tipo==='resgate').reduce((s,mv)=>s+Number(mv.val||0),0);
-  const tE=ent.filter(r=>r.st==='recebido').reduce((s,r)=>s+Number(r.val||0),0)+res;
+  // v27: entrou o que entrou de verdade, somando as baixas parciais.
+  const tE=ent.reduce((s,r)=>s+_recRecebido(r),0)+res;
   const tS=sai.filter(p=>p.st==='pago').reduce((s,p)=>s+Number(p.val||0),0)+dep;
-  const pE=ent.filter(r=>r.st==='pendente').reduce((s,r)=>s+Number(r.val||0),0);
+  const pE=ent.reduce((s,r)=>s+_recSaldo(r),0);
   const pS=sai.filter(p=>p.st==='pendente').reduce((s,p)=>s+Number(p.val||0),0);
   const saldo=tE-tS;const saldoPrev=saldo+pE-pS;
   document.getElementById('fc-body').innerHTML=`
@@ -1368,7 +1398,7 @@ function renderFluxo(){
     </div>
     <div style="margin-bottom:12px;">
       <div class="dre-row hdr"><span>↓ ENTRADAS</span><span>Valor</span></div>
-      ${ent.map(r=>`<div class="dre-row sub"><span>${r.cliNome||''} — ${r.desc||''} <span class="badge ${r.st==='recebido'?'b-green':r.st==='atraso'?'b-red':'b-yellow'}">${r.st||''}</span></span><span style="color:var(--green)">${fmt(r.val)}</span></div>`).join('')||'<div class="dre-row sub"><span>—</span><span></span></div>'}
+      ${ent.map(r=>`<div class="dre-row sub"><span>${r.cliNome||''} — ${r.desc||''} <span class="badge ${_recSt(r)==='recebido'?'b-green':_recSt(r)==='parcial'?'b-orange':_recSt(r)==='atraso'?'b-red':'b-yellow'}">${_recSt(r)}</span>${_recSt(r)==='parcial'?` <span style="font-size:10px;color:var(--text3)">recebido ${fmt(_recRecebido(r))}</span>`:''}</span><span style="color:var(--green)">${fmt(r.val)}</span></div>`).join('')||'<div class="dre-row sub"><span>—</span><span></span></div>'}
       ${res>0?`<div class="dre-row sub" style="color:var(--green)"><span>💰 Resgates de Provisão</span><span>+${fmt(res)}</span></div>`:''}
       <div class="dre-row total"><span>Total Entradas</span><span style="color:var(--green)">${fmt(tE+pE)}</span></div>
     </div>
@@ -1633,26 +1663,163 @@ function renderReceber(){
   const q=(document.getElementById('rec-q')?.value||'').toLowerCase();const st=document.getElementById('rec-st')?.value||'';const cli=document.getElementById('rec-cli')?.value||'';const de=document.getElementById('rec-de')?.value||'';const ate=document.getElementById('rec-ate')?.value||'';
   let lista=de||ate?ERP.receber.filter(r=>(!de||r.venc>=de)&&(!ate||r.venc<=ate)):ERP.receber.filter(r=>r.comp===mes||r.venc?.slice(0,7)===mes);
   if(q)lista=lista.filter(r=>(r.cliNome||'').toLowerCase().includes(q)||(r.desc||'').toLowerCase().includes(q));
-  if(st)lista=lista.filter(r=>r.st===st);if(cli)lista=lista.filter(r=>r.cliId===cli);
+  if(st)lista=lista.filter(r=>_recSt(r)===st);if(cli)lista=lista.filter(r=>r.cliId===cli);
   lista.sort((a,b)=>new Date(a.venc||'9999')-new Date(b.venc||'9999'));
-  const tP=lista.filter(r=>r.st!=='recebido').reduce((s,r)=>s+Number(r.val||0),0);const tR=lista.filter(r=>r.st==='recebido').reduce((s,r)=>s+Number(r.val||0),0);
+  // v27: soma por VALOR recebido e por SALDO, nao por status. Antes um
+  // lancamento pago pela metade caia inteiro num lado ou no outro.
+  const tP=lista.reduce((s,r)=>s+_recSaldo(r),0);const tR=lista.reduce((s,r)=>s+_recRecebido(r),0);
   const res=document.getElementById('rec-res');if(res)res.innerHTML=`<span style="color:var(--green);font-weight:700">Recebido: ${fmt(tR)}</span> | <span style="color:var(--yellow);font-weight:700">Pendente: ${fmt(tP)}</span>`;
   if(!lista.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:14px">Nenhum lançamento.</td></tr>';return;}
   tb.innerHTML=lista.map(r=>{const a=vencStatus(r.venc,r.st);const liq=r.val-(r.val*(r.retP||0)/100);const comp=r.comp?MESES[Number(r.comp.split('-')[1])-1]+'/'+r.comp.split('-')[0]:'—';
-    return`<tr class="${a.cls}"><td>${r.desc||'—'}${r.extras?.length?`<div style="font-size:10px;color:var(--orange);">+${r.extras.length} extra(s)</div>`:''}</td><td>${r.cliNome||'—'}</td><td>${comp}</td><td>${r.venc?new Date(r.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><strong style="color:var(--green)">${fmt(r.val)}</strong></td><td>${(r.retP||0)>0?`<span class="badge b-yellow">${r.retP}%</span>`:'—'}</td><td>${fmt(liq)}</td><td><span class="badge ${r.st==='recebido'?'b-green':r.st==='atraso'?'b-red':'b-yellow'}">${r.st||''}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="editarRec('${r.id}')">✏️</button>${r.st!=='recebido'?`<button class="btn btn-green btn-sm" onclick="baixarRec('${r.id}')">✓</button>`:''}<button class="btn btn-danger btn-sm" onclick="excluirRec('${r.id}')">🗑️</button></td></tr>`;
+    return`<tr class="${a.cls}"><td>${r.desc||'—'}${r.extras?.length?`<div style="font-size:10px;color:var(--orange);">+${r.extras.length} extra(s)</div>`:''}</td><td>${r.cliNome||'—'}</td><td>${comp}</td><td>${r.venc?new Date(r.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><strong style="color:var(--green)">${fmt(r.val)}</strong>${_recSt(r)==='parcial'?`<div style="font-size:10px;color:var(--green)">recebido ${fmt(_recRecebido(r))} · falta ${fmt(_recSaldo(r))}</div>`:''}</td><td>${(r.retP||0)>0?`<span class="badge b-yellow">${r.retP}%</span>`:'—'}</td><td>${fmt(liq)}</td><td><span class="badge ${_recSt(r)==='recebido'?'b-green':_recSt(r)==='parcial'?'b-orange':_recSt(r)==='atraso'?'b-red':'b-yellow'}">${_recSt(r)}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="editarRec('${r.id}')">✏️</button>${_recSaldo(r)>0?`<button class="btn btn-green btn-sm" title="Registrar recebimento (pode ser parcial)" onclick="baixarRec('${r.id}')">✓</button>`:`<button class="btn btn-ghost btn-sm" title="Ver ou desfazer os recebimentos" onclick="baixarRec('${r.id}')">💰</button>`}<button class="btn btn-danger btn-sm" onclick="excluirRec('${r.id}')">🗑️</button></td></tr>`;
   }).join('');
 }
 function editarRec(id){const r=ERP.receber.find(x=>x.id===id);_extrasRec=[...(r.extras||[])];abrirModalReceber(id);}
-function baixarRec(id){const r=ERP.receber.find(x=>x.id===id);if(r){r.up=Date.now();r.st='recebido';r.drec=new Date().toISOString().slice(0,10);salvarERP();renderReceber();renderDash();}}
+// v27 ---------------------------------------------------------------
+// RECEBIMENTO PARCIAL. Ate a v26 o botao de baixa era tudo ou nada:
+// quem recebia sinal para comecar, ou um contrato pago pela metade,
+// nao tinha como registrar — ou mentia que recebeu tudo, ou deixava
+// tudo pendente. Agora cada lancamento guarda a lista de baixas e o
+// status e DERIVADO do saldo, nunca gravado por fora.
+function _recBaixas(r){ return (r && Array.isArray(r.baixas)) ? r.baixas : []; }
+function _recRecebido(r){
+  var b=_recBaixas(r);
+  if(b.length) return Math.round(b.reduce(function(s,x){ return s+Number(x.val||0); },0)*100)/100;
+  // Lancamento antigo, de antes da v27: baixa inteira sem lista.
+  return (r && r.st==='recebido') ? Number(r.val||0) : 0;
+}
+function _recSaldo(r){
+  return Math.max(0, Math.round((Number((r&&r.val)||0)-_recRecebido(r))*100)/100);
+}
+function _recSt(r){
+  if(!r) return 'pendente';
+  if(Number(r.val||0)>0 && _recSaldo(r)<=0.005) return 'recebido';
+  if(_recRecebido(r)>0) return 'parcial';
+  return r.st||'pendente';
+}
+function _recSincronizaSt(r){
+  if(!r) return;
+  var st=_recSt(r);
+  r.st=st;
+  if(st==='recebido'){
+    var b=_recBaixas(r);
+    r.drec=b.length?b[b.length-1].data:(r.drec||new Date().toISOString().slice(0,10));
+  } else { r.drec=''; }
+  if(r.vendaId){
+    var v=ERP.vendas.find(function(x){ return x.id===r.vendaId; });
+    if(v){ v.st=_stVenda(v); v.up=Date.now(); }
+  }
+}
+
+var _baixaId=null;
+function baixarRec(id){
+  var r=ERP.receber.find(function(x){ return x.id===id; });
+  if(!r) return;
+  _baixaId=id;
+  document.getElementById('mbx-tit').textContent=r.desc||'Recebimento';
+  document.getElementById('mbx-cli').textContent=r.cliNome||'';
+  document.getElementById('mbx-total').textContent=fmt(r.val);
+  document.getElementById('mbx-jarec').textContent=fmt(_recRecebido(r));
+  document.getElementById('mbx-saldo').textContent=fmt(_recSaldo(r));
+  document.getElementById('mbx-val').value=_recSaldo(r).toFixed(2);
+  document.getElementById('mbx-data').value=new Date().toISOString().slice(0,10);
+  var b=_recBaixas(r);
+  document.getElementById('mbx-hist').innerHTML=b.length
+    ? '<div style="font-size:11px;color:var(--text2);margin-top:10px;"><strong>Já recebido:</strong>'+
+      b.map(function(x,i){ return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--bg);">'+
+        '<span>'+(x.data?new Date(x.data+'T12:00').toLocaleDateString('pt-BR'):'—')+'</span><span>'+fmt(x.val)+'</span></div>'; }).join('')+
+      '<button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="desfazerUltimaBaixa()">↩️ Desfazer o último</button></div>'
+    : '';
+  abrirModal('modal-baixa');
+}
+function confirmarBaixa(){
+  var r=ERP.receber.find(function(x){ return x.id===_baixaId; });
+  if(!r) return;
+  var val=Number(document.getElementById('mbx-val').value||0);
+  var data=document.getElementById('mbx-data').value||new Date().toISOString().slice(0,10);
+  var saldo=_recSaldo(r);
+  if(!(val>0)){ alert('Informe um valor maior que zero.'); return; }
+  if(val-saldo>0.005){
+    alert('Esse valor é maior que o saldo em aberto ('+fmt(saldo)+').\n\n'+
+          'Se o cliente pagou a mais, corrija o valor do lançamento em vez de registrar uma baixa maior que ele.');
+    return;
+  }
+  if(!Array.isArray(r.baixas)) r.baixas=[];
+  r.baixas.push({data:data,val:Math.round(val*100)/100});
+  r.up=Date.now();
+  _recSincronizaSt(r);
+  salvarERP(); fm('modal-baixa'); renderReceber(); renderDash();
+  try{ renderVendas&&renderVendas(); }catch(e){}
+}
+function desfazerUltimaBaixa(){
+  var r=ERP.receber.find(function(x){ return x.id===_baixaId; });
+  if(!r) return;
+  var b=_recBaixas(r);
+  if(!b.length){
+    // Lancamento antigo marcado como recebido sem lista de baixas.
+    if(r.st==='recebido' && confirm('Este lançamento foi dado como recebido antes do controle de parcelas. Reabrir como pendente?')){
+      r.st='pendente'; r.drec=''; r.up=Date.now(); _recSincronizaSt(r);
+      salvarERP(); fm('modal-baixa'); renderReceber(); renderDash();
+    }
+    return;
+  }
+  if(!confirm('Desfazer o recebimento de '+fmt(b[b.length-1].val)+'?')) return;
+  r.baixas.pop(); r.up=Date.now(); _recSincronizaSt(r);
+  salvarERP(); fm('modal-baixa'); renderReceber(); renderDash();
+  try{ renderVendas&&renderVendas(); }catch(e){}
+}
+function _baixarRecTudo(id){const r=ERP.receber.find(x=>x.id===id);if(r){
+  if(!Array.isArray(r.baixas))r.baixas=[];
+  const saldo=_recSaldo(r);
+  if(saldo>0)r.baixas.push({data:new Date().toISOString().slice(0,10),val:saldo});
+  r.up=Date.now();_recSincronizaSt(r);
+  salvarERP();renderReceber();renderDash();try{renderVendas&&renderVendas();}catch(e){}}}
 function excluirRec(id){if(!confirm('Excluir?'))return;ERP.receber=ERP.receber.filter(x=>x.id!==id);_marcarExcluido('receber',id);salvarERP();renderReceber();}
 
 // VENDAS
 let _itensVd=[];
+// v26: sugere a competencia pelo vencimento, mas nunca sobrescreve o
+// que a Marjorie ja escolheu — cobertura que atravessa o mes e ela quem
+// sabe em qual mes o custo caiu.
+function _vdSugereComp(){
+  const c=document.getElementById('mvd-comp'); if(!c||c.value) return;
+  const v=(document.getElementById('mvd-venc')||{}).value||'';
+  if(v) c.value=v.slice(0,7);
+}
+function _recsDaVenda(vendaId){
+  return (ERP.receber||[]).filter(function(r){ return r && r.vendaId===vendaId; });
+}
+function _recDaVenda(vendaId){
+  return _recsDaVenda(vendaId)[0];
+}
+// O status da venda era GRAVADO e nunca mais mexido: dar baixa no
+// recebimento deixava a venda "pendente / 14d atraso" para sempre.
+// Agora o recebimento manda — ele e quem sabe se o dinheiro entrou.
+function _stVenda(v){
+  // v27: a venda pode ter DOIS lancamentos (sinal e saldo). Ela so esta
+  // recebida quando os dois estiverem; com um so, e parcial.
+  const rs=_recsDaVenda(v.id);
+  if(!rs.length) return v.st||'pendente';
+  const tot=rs.reduce(function(s,r){ return s+Number(r.val||0); },0);
+  const rec=rs.reduce(function(s,r){ return s+_recRecebido(r); },0);
+  if(tot>0 && tot-rec<=0.005) return 'recebido';
+  if(rec>0) return 'parcial';
+  return rs.some(function(r){ return _recSt(r)==='atraso'; }) ? 'atraso' : 'pendente';
+}
 function abrirModalVenda(id){
   popSel(['mvd-cli'],'<option value="">Selecione...</option>');const h=new Date();
   _itensVd=id?[...(ERP.vendas.find(x=>x.id===id)?.itens||[])]:[{svId:'',desc:'',qty:1,val:0}];
-  if(id){const v=ERP.vendas.find(x=>x.id===id);document.getElementById('mvd-id').value=v.id;document.getElementById('mvd-cli').value=v.cliId||'';document.getElementById('mvd-data').value=v.data||'';document.getElementById('mvd-venc').value=v.venc||'';document.getElementById('mvd-ret').value=v.retP||0;document.getElementById('mvd-obs').value=v.obs||'';}
-  else{['mvd-id','mvd-obs'].forEach(x=>document.getElementById(x).value='');document.getElementById('mvd-cli').value='';document.getElementById('mvd-data').value=h.toISOString().slice(0,10);document.getElementById('mvd-venc').value='';document.getElementById('mvd-ret').value=0;}
+  if(id){const v=ERP.vendas.find(x=>x.id===id);document.getElementById('mvd-id').value=v.id;document.getElementById('mvd-cli').value=v.cliId||'';document.getElementById('mvd-data').value=v.data||'';document.getElementById('mvd-venc').value=v.venc||'';document.getElementById('mvd-ret').value=v.retP||0;document.getElementById('mvd-obs').value=v.obs||'';
+    const rv=_recDaVenda(v.id);
+    document.getElementById('mvd-comp').value=v.comp||(rv&&rv.comp)||(v.venc||'').slice(0,7)||'';
+    // O sinal so existe na criacao: numa venda ja gravada os lancamentos
+    // ja estao em Contas a Receber e sao editados la.
+    document.getElementById('mvd-sinal').value='';
+    document.getElementById('mvd-sinal-venc').value='';
+    document.getElementById('mvd-sinal-box').style.display='none';}
+  else{['mvd-id','mvd-obs'].forEach(x=>document.getElementById(x).value='');document.getElementById('mvd-cli').value='';document.getElementById('mvd-data').value=h.toISOString().slice(0,10);document.getElementById('mvd-venc').value='';document.getElementById('mvd-ret').value=0;document.getElementById('mvd-comp').value='';
+    document.getElementById('mvd-sinal').value='';document.getElementById('mvd-sinal-venc').value='';
+    document.getElementById('mvd-sinal-box').style.display='';}
   renderItensVd();abrirModal('modal-vd');
 }
 function addItemVd(){_itensVd.push({svId:'',desc:'',qty:1,val:0});renderItensVd();}
@@ -1666,18 +1833,55 @@ function salvarVenda(){
   const cliId=document.getElementById('mvd-cli').value;const cli=ERP.clientes.find(c=>c.id===cliId);
   const tot=_itensVd.reduce((s,it)=>s+Number(it.val||0)*Number(it.qty||1),0);const retP=Number(document.getElementById('mvd-ret').value||0);
   const id=document.getElementById('mvd-id').value;
-  const obj={up:Date.now(),id:id||gid(),cliId,cliNome:cli?.nome||'',data:document.getElementById('mvd-data').value,venc:document.getElementById('mvd-venc').value,itens:[..._itensVd],val:tot,retP,obs:document.getElementById('mvd-obs').value.trim(),st:'pendente'};
+  // v26: a competencia e escolhida, nao deduzida da data da venda.
+  const comp=(document.getElementById('mvd-comp')||{}).value
+          || (document.getElementById('mvd-venc')||{}).value?.slice(0,7)
+          || (document.getElementById('mvd-data')||{}).value?.slice(0,7) || getMes();
+  const antiga=id?ERP.vendas.find(x=>x.id===id):null;
+  const obj={up:Date.now(),id:id||gid(),cliId,cliNome:cli?.nome||'',data:document.getElementById('mvd-data').value,venc:document.getElementById('mvd-venc').value,comp,itens:[..._itensVd],val:tot,retP,obs:document.getElementById('mvd-obs').value.trim(),st:(antiga&&antiga.st)||'pendente'};
+  const desc=obj.itens.map(it=>it.desc).filter(Boolean).join(', ')||'Venda avulsa';
   if(id){const i=ERP.vendas.findIndex(x=>x.id===id);ERP.vendas[i]=obj;}else ERP.vendas.push(obj);
-  if(!id){const comp=obj.data?.slice(0,7)||getMes();ERP.receber.push({up:Date.now(),id:gid(),cliId,cliNome:cli?.nome||'',comp,desc:obj.itens.map(it=>it.desc).join(', ')||'Venda avulsa',val:tot,retP,venc:obj.venc,st:'pendente',origem:'venda',vendaId:obj.id});}
+  // v26: ate aqui, editar uma venda NAO mexia no recebimento dela — o
+  // valor mudava na venda e ficava velho em Contas a Receber, e as duas
+  // telas passavam a discordar sem avisar ninguem.
+  const recs=_recsDaVenda(obj.id);
+  const rec=recs[0];
+  if(!recs.length){
+    const sinal=Number((document.getElementById('mvd-sinal')||{}).value||0);
+    const sinalVenc=(document.getElementById('mvd-sinal-venc')||{}).value||'';
+    if(sinal>0 && tot-sinal>0.005){
+      // Dois lancamentos: cada um com o SEU vencimento, para a previsao
+      // do Fluxo de Caixa cair no mes certo.
+      ERP.receber.push({up:Date.now(),id:gid(),cliId,cliNome:cli?.nome||'',comp,desc:desc+' — sinal',val:Math.round(sinal*100)/100,retP,venc:sinalVenc||obj.data||obj.venc,st:'pendente',origem:'venda',vendaId:obj.id,baixas:[]});
+      ERP.receber.push({up:Date.now(),id:gid(),cliId,cliNome:cli?.nome||'',comp,desc:desc+' — saldo',val:Math.round((tot-sinal)*100)/100,retP,venc:obj.venc,st:'pendente',origem:'venda',vendaId:obj.id,baixas:[]});
+    } else {
+      if(sinal>0) alert('O sinal é igual ou maior que o total da venda — lancei um recebimento só, pelo valor cheio.');
+      ERP.receber.push({up:Date.now(),id:gid(),cliId,cliNome:cli?.nome||'',comp,desc:desc,val:tot,retP,venc:obj.venc,st:'pendente',origem:'venda',vendaId:obj.id,baixas:[]});
+    }
+  } else if(recs.length>1){
+    // Venda com sinal e saldo: nao da para dividir a mudanca sozinho.
+    alert('\u26A0\uFE0F Esta venda tem '+recs.length+' lançamentos em Contas a Receber (sinal e saldo).\n\n'+
+          'Mudei a venda, mas NÃO mexi nos valores deles — eu não teria como adivinhar como dividir a diferença.\n\n'+
+          'Ajuste o sinal e o saldo direto em Contas a Receber.');
+  } else if(_recRecebido(rec)>0){
+    if(Number(rec.val||0)!==tot || rec.comp!==comp || rec.venc!==obj.venc){
+      alert('\u26A0\uFE0F Este recebimento já tem '+fmt(_recRecebido(rec))+' recebido em Contas a Receber.\n\n'+
+            'Mudei a venda, mas NÃO mexi no recebimento, para não alterar dinheiro que já entrou.\n\n'+
+            'Se a mudança valia também para ele, ajuste direto em Contas a Receber.');
+    }
+  } else {
+    rec.up=Date.now(); rec.cliId=cliId; rec.cliNome=cli?.nome||''; rec.comp=comp;
+    rec.desc=desc; rec.val=tot; rec.retP=retP; rec.venc=obj.venc;
+  }
   salvarERP();fm('modal-vd');renderVendas();renderReceber();renderDash();_itensVd=[];
 }
 function renderVendas(){
   const tb=document.getElementById('tb-vd');const q=(document.getElementById('vd-q')?.value||'').toLowerCase();const st=document.getElementById('vd-st')?.value||'';const de=document.getElementById('vd-de')?.value||'';const ate=document.getElementById('vd-ate')?.value||'';
   let lista=ERP.vendas.filter(v=>(!de||v.data>=de)&&(!ate||v.data<=ate));
-  if(q)lista=lista.filter(v=>(v.cliNome||'').toLowerCase().includes(q));if(st)lista=lista.filter(v=>v.st===st);
+  if(q)lista=lista.filter(v=>(v.cliNome||'').toLowerCase().includes(q));if(st)lista=lista.filter(v=>_stVenda(v)===st);
   lista.sort((a,b)=>new Date(b.data)-new Date(a.data));
   if(!lista.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Nenhuma venda.</td></tr>';return;}
-  tb.innerHTML=lista.map(v=>{const a=vencStatus(v.venc,v.st);return`<tr class="${a.cls}"><td>${v.data?new Date(v.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td>${v.cliNome||'—'}</td><td style="font-size:11px;">${v.itens?.map(it=>it.desc).join(', ')||'—'}</td><td><strong style="color:var(--green)">${fmt(v.val)}</strong></td><td>${v.venc?new Date(v.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><span class="badge ${v.st==='recebido'?'b-green':'b-yellow'}">${v.st||''}</span></td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalVenda('${v.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirVd('${v.id}')">🗑️</button></td></tr>`;}).join('');
+  tb.innerHTML=lista.map(v=>{const _st=_stVenda(v);const _r=_recDaVenda(v.id);const a=vencStatus(v.venc,_st);return`<tr class="${a.cls}"><td>${v.data?new Date(v.data+'T12:00').toLocaleDateString('pt-BR'):'—'}</td><td>${v.cliNome||'—'}</td><td style="font-size:11px;">${v.itens?.map(it=>it.desc).join(', ')||'—'}</td><td><strong style="color:var(--green)">${fmt(v.val)}</strong>${(()=>{const _tr=_recsDaVenda(v.id).reduce((s,x)=>s+Number(x.val||0),0);return (_r&&Math.abs(_tr-Number(v.val||0))>0.005)?`<div style="font-size:10px;color:var(--red)">em Contas a Receber: ${fmt(_tr)}</div>`:'';})()}</td><td>${v.venc?new Date(v.venc+'T12:00').toLocaleDateString('pt-BR'):'—'} ${a.badge}</td><td><span class="badge ${_st==='recebido'?'b-green':'b-yellow'}">${_st}</span>${!_r?' <span class="badge b-red" title="Esta venda não tem recebimento em Contas a Receber">sem recebimento</span>':`<div style="font-size:10px;color:var(--text3)">comp. ${_mesLabelCurto(_r.comp||'')}${_recsDaVenda(v.id).length>1?' · sinal + saldo':''}${_st==='parcial'?' · recebido '+fmt(_recsDaVenda(v.id).reduce((s,x)=>s+_recRecebido(x),0)):''}</div>`}</td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="abrirModalVenda('${v.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="excluirVd('${v.id}')">🗑️</button></td></tr>`;}).join('');
 }
 function excluirVd(id){if(!confirm('Excluir?'))return;const vinculadas=ERP.receber.filter(x=>x.vendaId===id).map(x=>x.id);ERP.vendas=ERP.vendas.filter(x=>x.id!==id);ERP.receber=ERP.receber.filter(x=>x.vendaId!==id);_marcarExcluido('vendas',id);vinculadas.forEach(rid=>_marcarExcluido('receber',rid));salvarERP();renderVendas();}
 
@@ -2463,7 +2667,7 @@ function relCCResumo(){
 }
 function relAging(){
   const hoje=new Date();const hIso=hoje.toISOString().slice(0,10);
-  const abertos=ERP.receber.filter(r=>r.st!=='recebido'&&r.venc);
+  const abertos=ERP.receber.filter(r=>_recSt(r)!=='recebido'&&r.venc);
   const faixa=r=>{const d=Math.floor((hoje-new Date(r.venc+'T12:00'))/(24*3600*1000));return d<=0?'aVencer':d<=30?'f30':d<=60?'f60':d<=90?'f90':'f90p';};
   const porCli={};
   abertos.forEach(r=>{const n=ERP.clientes.find(c=>c.id===r.cliId)?.nome||r.cliNome||'—';
@@ -2486,7 +2690,12 @@ function relEvolucao(){
     const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
     const m=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     const fat=ERP.receber.filter(r=>(r.comp===m||r.venc?.slice(0,7)===m)).reduce((s,r)=>s+Number(r.val||0),0)+ERP.vendas.filter(v=>(v.data||'').slice(0,7)===m).reduce((s,v)=>s+Number(v.val||0),0);
-    const rec=ERP.receber.filter(r=>r.st==='recebido'&&(r.drec||r.venc||'').slice(0,7)===m).reduce((s,r)=>s+Number(r.val||0),0);
+    // v27: soma as baixas pelo mes em que cada uma entrou.
+    const rec=ERP.receber.reduce((s,r)=>{
+      const b=_recBaixas(r);
+      if(b.length) return s+b.filter(x=>(x.data||'').slice(0,7)===m).reduce((a,x)=>a+Number(x.val||0),0);
+      return s+((r.st==='recebido'&&(r.drec||r.venc||'').slice(0,7)===m)?Number(r.val||0):0);
+    },0);
     const desp=ERP.pagar.filter(p=>(p.comp||p.venc?.slice(0,7))===m&&!p.estoque&&!p.capital).reduce((s,p)=>s+Number(p.val||0),0)+ERP.impostos.filter(x=>x.comp===m&&x.ret!=='sim').reduce((s,x)=>s+Number(x.val||0),0);
     t.fat+=fat;t.rec+=rec;t.desp+=desp;
     const res=fat-fat*Number(ERP.config.aliq||4.5)/100-desp;

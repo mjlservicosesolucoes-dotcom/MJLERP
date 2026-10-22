@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v31</title>
+<title>MJL ERP Financeiro v32</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1137,7 +1137,8 @@ function gid(){
 }
 function fmt(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtP(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';}
-function fm(id){const el=document.getElementById(id);if(el){el.classList.add('hidden');el.style.display='none';}}
+function fm(id){const el=document.getElementById(id);if(el){el.classList.add('hidden');el.style.display='none';}
+  if(typeof _updPendente!=='undefined'&&_updPendente&&!_modalAberto()){_updPendente=false;atualizarTudo();}}
 function abrirModal(id){const el=document.getElementById(id);if(el){el.classList.remove('hidden');el.style.display='flex';}}
 function vencStatus(dt,st){
   if(st==='pago'||st==='recebido')return{cls:'',badge:''};
@@ -1183,6 +1184,18 @@ function popularMeses(selId){
 }
 function getMes(){return document.getElementById('filtro-mes').value;}
 function atualizarTudo(){const p=document.querySelector('.page.active')?.id?.replace('page-','');if(p)navegar(p);}
+// v32: tem modal aberto na tela?
+function _modalAberto(){return !!document.querySelector('.modal-overlay:not(.hidden)');}
+// v32: a sincronizacao roda sozinha (a cada 5 min, ao voltar pro app e
+// quando outro aparelho grava). Se ela re-renderizar no meio de um
+// cadastro, a tela muda embaixo do dedo e o que estava digitado vira
+// dado velho. Com modal aberto, guarda o pedido e atualiza depois que
+// fechar.
+var _updPendente=false;
+function _atualizarSeguro(){
+  if(_modalAberto()){_updPendente=true;return;}
+  atualizarTudo();
+}
 function popSel(ids,ph=''){ids.forEach(id=>{const s=document.getElementById(id);if(!s)return;const v=s.value;s.innerHTML=(ph||'<option value="">Selecione...</option>')+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');s.value=v;});}
 function popCC(ids){ids.forEach(id=>{const s=document.getElementById(id);if(!s)return;const v=s.value;s.innerHTML='<option value="">ADM Geral</option>'+ERP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');s.value=v;});}
 // v22 ---------------------------------------------------------------
@@ -1375,7 +1388,7 @@ function renderDRE(){
 
 // FLUXO
 function resetFluxo(){const h=new Date();document.getElementById('fc-de').value=new Date(h.getFullYear(),h.getMonth(),1).toISOString().slice(0,10);document.getElementById('fc-ate').value=new Date(h.getFullYear(),h.getMonth()+1,0).toISOString().slice(0,10);renderFluxo();}
-// v31 ---------------------------------------------------------------
+// v32 ---------------------------------------------------------------
 // Previsao de VT/VA do mes seguinte. E SO REFERENCIA — nao cria
 // lancamento nenhum. A Marjorie lanca VT e VA a mao de proposito: se
 // houve falta ou troca de posto ela ja desconta na hora, e um gerador
@@ -1412,7 +1425,7 @@ function renderFluxo(){
   const pE=ent.reduce((s,r)=>s+_recSaldo(r),0);
   const pS=sai.filter(p=>p.st==='pendente').reduce((s,p)=>s+Number(p.val||0),0);
   const saldo=tE-tS;const saldoPrev=saldo+pE-pS;
-  // v31: de que mes e cada competencia, e quanto de VT/VA vem a seguir.
+  // v32: de que mes e cada competencia, e quanto de VT/VA vem a seguir.
   const _mesBase=(de||ate)?String(ate||de).slice(0,7):mes;
   const _prox=_addMes(_mesBase,1);
   const _prev=_previsaoBeneficios();
@@ -1578,7 +1591,7 @@ function _detalheRateioPagarPorCliente(cliId,per){
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc+(per.multi?' · '+_mesLabelCurto(_compPagar(p)):''),pct:Number(r.pct),val:valor*Number(r.pct)/100,
-        // v31: o mes em que o dinheiro sai, quando for diferente do mes
+        // v32: o mes em que o dinheiro sai, quando for diferente do mes
         // do custo. Competencia e margem; vencimento e caixa.
         vencMes:(p.venc||'').slice(0,7), compMes:_compPagar(p)});
     });
@@ -2402,6 +2415,10 @@ function abrirModalColab(id){
     if(document.getElementById('mco-vinculo'))document.getElementById('mco-vinculo').value='fixo';
     _rateiosCol=[];
   }
+  // v32: o titulo ficava "Novo Colaborador" mesmo editando. Sem isso
+  // nao da pra conferir se abriu a pessoa certa.
+  const _t=document.getElementById('mco-tit');
+  if(_t){const _c=id?ERP.colaboradores.find(x=>x.id===id):null;_t.textContent=_c?('Editar — '+_c.nome):'Novo Colaborador';}
   renderRateiosCol();calcCustoCol();abrirModal('modal-col');
 }
 function salvarColab(){
@@ -3891,9 +3908,15 @@ function salvarConfig(){
 }
 function novoItem(){}
 
-document.querySelectorAll('.modal-overlay').forEach(ov=>{
-  ov.addEventListener('click',e=>{if(e.target===ov){ov.classList.add('hidden');ov.style.display='none';}});
-});
+// v32 BUG: "quando clico pra mudar, a tela fecha". A culpa era deste
+// handler. A moldura de 16px em volta da janela conta como fundo, e a
+// janela do colaborador rola por dentro. No celular, quando o teclado
+// numerico abre e o layout desloca, ou quando o dedo rola a janela e
+// solta perto da borda, o clique cai no fundo e o formulario fechava
+// INTEIRO, jogando fora o que ja tinha sido digitado. Formulario com
+// dado digitado nao pode fechar por acidente: agora so fecha pelo x
+// ou pelo Cancelar.
+// (handler de fundo removido de proposito — nao recolocar)
 
 // ===== SINCRONIZAÇÃO ERP ↔ SHEETS =====
 var ERP_SCRIPT_URL='';
@@ -3939,7 +3962,7 @@ async function sincronizarERP(){
 }
 setInterval(function(){
   if(navigator.onLine&&(ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url'))){
-    carregarDoSheets().then(function(ok){if(ok)atualizarTudo();});
+    carregarDoSheets().then(function(ok){if(ok)_atualizarSeguro();});
   }
 },5*60*1000);
 window.addEventListener('online',function(){
@@ -3947,12 +3970,12 @@ window.addEventListener('online',function(){
 });
 window.addEventListener('storage',function(e){
   if(e.key==='mjl_erp_v2'&&e.newValue){
-    try{ERP=JSON.parse(e.newValue);atualizarTudo();}catch(err){}
+    try{ERP=JSON.parse(e.newValue);_atualizarSeguro();}catch(err){}
   }
 });
 document.addEventListener('visibilitychange',function(){
   if(!document.hidden&&(ERP_SCRIPT_URL||localStorage.getItem('mjl_erp_script_url'))){
-    carregarDoSheets().then(function(ok){if(ok)atualizarTudo();});
+    carregarDoSheets().then(function(ok){if(ok)_atualizarSeguro();});
   }
 });
 

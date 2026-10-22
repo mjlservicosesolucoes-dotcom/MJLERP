@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v32</title>
+<title>MJL ERP Financeiro v33</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1184,9 +1184,9 @@ function popularMeses(selId){
 }
 function getMes(){return document.getElementById('filtro-mes').value;}
 function atualizarTudo(){const p=document.querySelector('.page.active')?.id?.replace('page-','');if(p)navegar(p);}
-// v32: tem modal aberto na tela?
+// v33: tem modal aberto na tela?
 function _modalAberto(){return !!document.querySelector('.modal-overlay:not(.hidden)');}
-// v32: a sincronizacao roda sozinha (a cada 5 min, ao voltar pro app e
+// v33: a sincronizacao roda sozinha (a cada 5 min, ao voltar pro app e
 // quando outro aparelho grava). Se ela re-renderizar no meio de um
 // cadastro, a tela muda embaixo do dedo e o que estava digitado vira
 // dado velho. Com modal aberto, guarda o pedido e atualiza depois que
@@ -1388,7 +1388,7 @@ function renderDRE(){
 
 // FLUXO
 function resetFluxo(){const h=new Date();document.getElementById('fc-de').value=new Date(h.getFullYear(),h.getMonth(),1).toISOString().slice(0,10);document.getElementById('fc-ate').value=new Date(h.getFullYear(),h.getMonth()+1,0).toISOString().slice(0,10);renderFluxo();}
-// v32 ---------------------------------------------------------------
+// v33 ---------------------------------------------------------------
 // Previsao de VT/VA do mes seguinte. E SO REFERENCIA — nao cria
 // lancamento nenhum. A Marjorie lanca VT e VA a mao de proposito: se
 // houve falta ou troca de posto ela ja desconta na hora, e um gerador
@@ -1425,7 +1425,7 @@ function renderFluxo(){
   const pE=ent.reduce((s,r)=>s+_recSaldo(r),0);
   const pS=sai.filter(p=>p.st==='pendente').reduce((s,p)=>s+Number(p.val||0),0);
   const saldo=tE-tS;const saldoPrev=saldo+pE-pS;
-  // v32: de que mes e cada competencia, e quanto de VT/VA vem a seguir.
+  // v33: de que mes e cada competencia, e quanto de VT/VA vem a seguir.
   const _mesBase=(de||ate)?String(ate||de).slice(0,7):mes;
   const _prox=_addMes(_mesBase,1);
   const _prev=_previsaoBeneficios();
@@ -1497,6 +1497,24 @@ function _temLancReal(comp, palavras){
     return palavras.some(function(w){ return nome.indexOf(w)>=0; });
   });
 }
+// v33: QUEM criou o lancamento. A marca `folha` NAO serve: a migracao
+// da v18 poe folha=true em qualquer lancamento cujo texto comece com
+// "Salario" ou "FGTS". Entao os FGTS que a contadora manda (FGTS Max,
+// FGTS Breno, FGTS Junho...) eram tratados como se fossem da folha e
+// PULADOS no Centro de Custo — R$ 1.370,42 de FGTS real invisivel nos
+// contratos, exatamente o numero que serve pra precificar. O texto
+// " \u00b7 folha real" so e produzido pelo Fechar a folha, e nenhum
+// lancamento de folha real esta sem ele (conferido na planilha em
+// 22/10/2026). Entao o texto e a marca.
+function _ehFolhaReal(p){ return /\u00b7\s*folha real/.test((p&&p.desc)||''); }
+// v33: lancamentos de folha real de uma competencia. Sao historia, igual
+// a folha fechada.
+function _folhaRealLancs(comp){
+  return (ERP.pagar||[]).filter(function(p){
+    if(!_ehFolhaReal(p)||p.estoque||p.capital)return false;
+    return String(p.folhaComp||_compPagar(p))===comp;
+  });
+}
 function _detalheRateioPorCliente(cliId,per){
   const linhas=[];
   let comp=per.ini;
@@ -1535,6 +1553,28 @@ function _detalheRateioPorCliente(cliId,per){
           if(c.proventos>0) linhas.push({nome:selo,parcela:'proventos',pct:Number(r.pct),val:c.proventos*f});
           if(!temFgtsReal && c.fgts>0) linhas.push({nome:selo,parcela:'FGTS estimado',pct:Number(r.pct),val:c.fgts*f});
           if(c.provTot>0) linhas.push({nome:selo,parcela:'provisões',pct:Number(r.pct),val:c.provTot*f});
+        });
+      });
+    } else if(_folhaRealLancs(comp).length){
+      // v33 BUG: junho tinha os salarios reais lancados (Breno 1.771,45,
+      // Max Magno 2.171,25, Diego Lacerda 1.300, Vanessa 450) mas NAO
+      // tinha folha fechada — a folha de junho foi apagada e os
+      // lancamentos ficaram. O detalhe do Pagar pula lancamento de folha
+      // real (certo, pra nao contar dobrado com a folha) e, sem folha,
+      // junho caia na ESTIMATIVA do cadastro. Resultado: o Max Magno
+      // (afastado, fora da estimativa) e a Vanessa (esporadica, tambem
+      // fora) sumiam de junho, e no lugar entrava gente que nem estava
+      // la (o Claudio inteiro no Le Levant) mais o VT/VA do cadastro.
+      // REGRA: o custo de pessoal de uma competencia vem de UMA fonte so
+      // — folha fechada, senao lancamento real de folha, senao
+      // estimativa. Misturar real com estimado no mesmo mes e contar
+      // dobrado ou esconder.
+      _folhaRealLancs(comp).forEach(function(p){
+        var valor=Number(p.val||0); if(!(valor>0))return;
+        var selo=String(p.desc||'folha real').replace(/\s*\u00b7\s*folha real.*$/,'')+(per.multi?' \uD83E\uDDFE '+_mesLabelCurto(comp):' \uD83E\uDDFE');
+        _rateiosDoPagar(p).forEach(function(r){
+          if((r.ccId||'')!==(cliId||'')||!(Number(r.pct||0)>0))return;
+          linhas.push({nome:selo,parcela:'proventos (folha real)',pct:Number(r.pct),val:valor*Number(r.pct)/100});
         });
       });
     } else {
@@ -1587,11 +1627,14 @@ function _detalheRateioPagarPorCliente(cliId,per){
     // v28: a marca `folha` e o criterio. O texto " · folha real" so e
     // produzido pelo Fechar a folha, entao serve de rede se a marca se
     // perder de novo — melhor duplicar o criterio do que duplicar custo.
-    if(p.estoque||p.folha||p.capital||/\u00b7\s*folha real/.test(p.desc||''))return;
+    // v33: era `p.estoque||p.folha||p.capital||<texto>`. O `p.folha`
+    // sozinho derrubava os FGTS da contadora (ver _ehFolhaReal). Agora
+    // so pula o que realmente veio do Fechar a folha.
+    if(p.estoque||p.capital||_ehFolhaReal(p))return;
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc+(per.multi?' · '+_mesLabelCurto(_compPagar(p)):''),pct:Number(r.pct),val:valor*Number(r.pct)/100,
-        // v32: o mes em que o dinheiro sai, quando for diferente do mes
+        // v33: o mes em que o dinheiro sai, quando for diferente do mes
         // do custo. Competencia e margem; vencimento e caixa.
         vencMes:(p.venc||'').slice(0,7), compMes:_compPagar(p)});
     });
@@ -2415,7 +2458,7 @@ function abrirModalColab(id){
     if(document.getElementById('mco-vinculo'))document.getElementById('mco-vinculo').value='fixo';
     _rateiosCol=[];
   }
-  // v32: o titulo ficava "Novo Colaborador" mesmo editando. Sem isso
+  // v33: o titulo ficava "Novo Colaborador" mesmo editando. Sem isso
   // nao da pra conferir se abriu a pessoa certa.
   const _t=document.getElementById('mco-tit');
   if(_t){const _c=id?ERP.colaboradores.find(x=>x.id===id):null;_t.textContent=_c?('Editar — '+_c.nome):'Novo Colaborador';}
@@ -3908,7 +3951,7 @@ function salvarConfig(){
 }
 function novoItem(){}
 
-// v32 BUG: "quando clico pra mudar, a tela fecha". A culpa era deste
+// v33 BUG: "quando clico pra mudar, a tela fecha". A culpa era deste
 // handler. A moldura de 16px em volta da janela conta como fundo, e a
 // janela do colaborador rola por dentro. No celular, quando o teclado
 // numerico abre e o layout desloca, ou quando o dedo rola a janela e

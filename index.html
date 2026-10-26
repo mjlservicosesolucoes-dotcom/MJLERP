@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJL ERP Financeiro v34</title>
+<title>MJL ERP Financeiro v35</title>
 <style>
 :root{
   --brand:#1a4f7a;--brand2:#2d6da8;--brand-light:#e8f0f8;
@@ -1184,9 +1184,9 @@ function popularMeses(selId){
 }
 function getMes(){return document.getElementById('filtro-mes').value;}
 function atualizarTudo(){const p=document.querySelector('.page.active')?.id?.replace('page-','');if(p)navegar(p);}
-// v34: tem modal aberto na tela?
+// v35: tem modal aberto na tela?
 function _modalAberto(){return !!document.querySelector('.modal-overlay:not(.hidden)');}
-// v34: a sincronizacao roda sozinha (a cada 5 min, ao voltar pro app e
+// v35: a sincronizacao roda sozinha (a cada 5 min, ao voltar pro app e
 // quando outro aparelho grava). Se ela re-renderizar no meio de um
 // cadastro, a tela muda embaixo do dedo e o que estava digitado vira
 // dado velho. Com modal aberto, guarda o pedido e atualiza depois que
@@ -1388,7 +1388,7 @@ function renderDRE(){
 
 // FLUXO
 function resetFluxo(){const h=new Date();document.getElementById('fc-de').value=new Date(h.getFullYear(),h.getMonth(),1).toISOString().slice(0,10);document.getElementById('fc-ate').value=new Date(h.getFullYear(),h.getMonth()+1,0).toISOString().slice(0,10);renderFluxo();}
-// v34 ---------------------------------------------------------------
+// v35 ---------------------------------------------------------------
 // Previsao de VT/VA do mes seguinte. E SO REFERENCIA — nao cria
 // lancamento nenhum. A Marjorie lanca VT e VA a mao de proposito: se
 // houve falta ou troca de posto ela ja desconta na hora, e um gerador
@@ -1425,7 +1425,7 @@ function renderFluxo(){
   const pE=ent.reduce((s,r)=>s+_recSaldo(r),0);
   const pS=sai.filter(p=>p.st==='pendente').reduce((s,p)=>s+Number(p.val||0),0);
   const saldo=tE-tS;const saldoPrev=saldo+pE-pS;
-  // v34: de que mes e cada competencia, e quanto de VT/VA vem a seguir.
+  // v35: de que mes e cada competencia, e quanto de VT/VA vem a seguir.
   const _mesBase=(de||ate)?String(ate||de).slice(0,7):mes;
   const _prox=_addMes(_mesBase,1);
   const _prev=_previsaoBeneficios();
@@ -1497,7 +1497,7 @@ function _temLancReal(comp, palavras){
     return palavras.some(function(w){ return nome.indexOf(w)>=0; });
   });
 }
-// v34: QUEM criou o lancamento. A marca `folha` NAO serve: a migracao
+// v35: QUEM criou o lancamento. A marca `folha` NAO serve: a migracao
 // da v18 poe folha=true em qualquer lancamento cujo texto comece com
 // "Salario" ou "FGTS". Entao os FGTS que a contadora manda (FGTS Max,
 // FGTS Breno, FGTS Junho...) eram tratados como se fossem da folha e
@@ -1507,7 +1507,7 @@ function _temLancReal(comp, palavras){
 // lancamento de folha real esta sem ele (conferido na planilha em
 // 22/10/2026). Entao o texto e a marca.
 function _ehFolhaReal(p){ return /\u00b7\s*folha real/.test((p&&p.desc)||''); }
-// v34: lancamentos de folha real de uma competencia. Sao historia, igual
+// v35: lancamentos de folha real de uma competencia. Sao historia, igual
 // a folha fechada.
 function _folhaRealLancs(comp){
   return (ERP.pagar||[]).filter(function(p){
@@ -1556,7 +1556,7 @@ function _detalheRateioPorCliente(cliId,per){
         });
       });
     } else if(_folhaRealLancs(comp).length){
-      // v34 BUG: junho tinha os salarios reais lancados (Breno 1.771,45,
+      // v35 BUG: junho tinha os salarios reais lancados (Breno 1.771,45,
       // Max Magno 2.171,25, Diego Lacerda 1.300, Vanessa 450) mas NAO
       // tinha folha fechada — a folha de junho foi apagada e os
       // lancamentos ficaram. O detalhe do Pagar pula lancamento de folha
@@ -1627,14 +1627,14 @@ function _detalheRateioPagarPorCliente(cliId,per){
     // v28: a marca `folha` e o criterio. O texto " · folha real" so e
     // produzido pelo Fechar a folha, entao serve de rede se a marca se
     // perder de novo — melhor duplicar o criterio do que duplicar custo.
-    // v34: era `p.estoque||p.folha||p.capital||<texto>`. O `p.folha`
+    // v35: era `p.estoque||p.folha||p.capital||<texto>`. O `p.folha`
     // sozinho derrubava os FGTS da contadora (ver _ehFolhaReal). Agora
     // so pula o que realmente veio do Fechar a folha.
     if(p.estoque||p.capital||_ehFolhaReal(p))return;
     const valor=Number(p.val||0);
     _rateiosDoPagar(p).forEach(r=>{
       if((r.ccId||'')===(cliId||'')&&Number(r.pct||0)>0)linhas.push({desc:p.desc+(per.multi?' · '+_mesLabelCurto(_compPagar(p)):''),pct:Number(r.pct),val:valor*Number(r.pct)/100,
-        // v34: o mes em que o dinheiro sai, quando for diferente do mes
+        // v35: o mes em que o dinheiro sai, quando for diferente do mes
         // do custo. Competencia e margem; vencimento e caixa.
         vencMes:(p.venc||'').slice(0,7), compMes:_compPagar(p)});
     });
@@ -2458,7 +2458,7 @@ function abrirModalColab(id){
     if(document.getElementById('mco-vinculo'))document.getElementById('mco-vinculo').value='fixo';
     _rateiosCol=[];
   }
-  // v34: o titulo ficava "Novo Colaborador" mesmo editando. Sem isso
+  // v35: o titulo ficava "Novo Colaborador" mesmo editando. Sem isso
   // nao da pra conferir se abriu a pessoa certa.
   const _t=document.getElementById('mco-tit');
   if(_t){const _c=id?ERP.colaboradores.find(x=>x.id===id):null;_t.textContent=_c?('Editar — '+_c.nome):'Novo Colaborador';}
@@ -2801,7 +2801,7 @@ function relDRE(){
 }
 function relCCResumo(){
   const mes=getMes();
-  // v34 BUG: a Rentabilidade por Contrato nao abria, so ela. Duas
+  // v35 BUG: a Rentabilidade por Contrato nao abria, so ela. Duas
   // chamadas erradas logo na primeira volta do laco:
   //   _detalheRateioPorCliente(cli.id)        <- sem o periodo
   //   _detalheRateioPagarPorCliente(cli.id,mes) <- com o mes em texto
@@ -2816,7 +2816,20 @@ function relCCResumo(){
   const per={ini:mes,fim:mes,multi:false};
   let linhas='',tR=0,tC=0,tM=0;
   ERP.clientes.forEach(cli=>{
-    const receita=ERP.receber.filter(r=>r.cliId===cli.id&&(r.comp===mes||r.venc?.slice(0,7)===mes)).reduce((s,r)=>s+Number(r.val||0),0);
+    // v35 BUG: a receita era filtrada por `r.comp===mes || r.venc===mes`.
+    // Esse OU conta o MESMO titulo duas vezes ao longo do ano: uma no mes
+    // da competencia e outra no mes do vencimento. E nao e caso raro —
+    // no modelo da MJL o servico e prestado num mes e recebido no
+    // seguinte, entao TODO contrato tem comp diferente de venc.
+    // Em out/26 a receita saia R$ 78.214,96 quando o certo e
+    // R$ 59.540,52: R$ 18.674,44 de competencia de SETEMBRO aparecendo
+    // de novo em outubro. Guarani mostrava 2.948,80 (1.587,80 de out +
+    // 1.361,00 de set), Le Levant 16.822,48 (6.431,04 + 6.074,44 +
+    // 4.317,00), e assim por diante — e como o CUSTO so olha
+    // competencia, a margem de todo mundo vinha inflada.
+    // O Centro de Custo sempre usou _compReceber: competencia, e o
+    // vencimento so quando nao ha competencia. UM titulo, UM mes.
+    const receita=ERP.receber.filter(r=>r.cliId===cli.id&&_dentro(_compReceber(r),per)).reduce((s,r)=>s+Number(r.val||0),0);
     const maoObra=_detalheRateioPorCliente(cli.id,per).reduce((s,r)=>s+r.val,0);
     const pag=_detalheRateioPagarPorCliente(cli.id,per).reduce((s,p)=>s+p.val,0);
     let imp=0;ERP.impostos.filter(i=>i.comp===mes&&i.ret!=='sim').forEach(i=>{_rateiosDoImposto(i).forEach(r=>{if(r.ccId===cli.id)imp+=Number(i.val||0)*Number(r.pct||0)/100;});});
@@ -2827,7 +2840,7 @@ function relCCResumo(){
     if(receita||custos){tR+=receita;tC+=custos+das;tM+=margem;
       linhas+=`<tr><td><strong>${cli.nome}</strong></td><td class="dir">${fmt(receita)}</td><td class="dir neg">(${fmt(das)})</td><td class="dir neg">(${fmt(maoObra)})</td><td class="dir neg">(${fmt(pag+imp)})</td><td class="dir neg">(${fmt(mat)})</td><td class="dir ${margem>=0?'pos':'neg'}"><strong>${fmt(margem)}</strong></td><td class="dir">${receita?(margem/receita*100).toFixed(1):0}%</td></tr>`;}
   });
-  // v34: custo que nao tem rateio nenhum nao aparece em contrato nenhum,
+  // v35: custo que nao tem rateio nenhum nao aparece em contrato nenhum,
   // entao o TOTAL daqui nunca e o resultado da empresa. Em vez de deixar
   // a diferenca invisivel, mede e avisa no rodape.
   const admTot=_detalheRateioPorCliente('',per).reduce((s,r)=>s+r.val,0)
@@ -3969,7 +3982,7 @@ function salvarConfig(){
 }
 function novoItem(){}
 
-// v34 BUG: "quando clico pra mudar, a tela fecha". A culpa era deste
+// v35 BUG: "quando clico pra mudar, a tela fecha". A culpa era deste
 // handler. A moldura de 16px em volta da janela conta como fundo, e a
 // janela do colaborador rola por dentro. No celular, quando o teclado
 // numerico abre e o layout desloca, ou quando o dedo rola a janela e
